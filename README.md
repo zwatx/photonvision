@@ -4,7 +4,9 @@
 > This fork adds [NAPA](https://github.com/zwatx/NAPA), a faster AprilTag detector, to PhotonVision's AprilTag
 > pipeline. Pick it under **Detector** in the AprilTag tab; it is the default for new and existing pipelines here, and
 > **AprilTag** switches back to WPILib's detector. NAPA's **Min Tag Size** replaces decimate: NAPA finds every tag at
-> least that many pixels across. NAPA is Copyright (c) 2026 Zachary Wilson and is included under the GPL-3.0-only (see
+> least that many pixels across. At the default, 16, NAPA's benchmark found every tag down to 12 px, about as small as
+> AprilTag at decimate 1 reaches; raise it for more speed if your tags are always larger. This fork doesn't publish PhotonLib: keep using upstream PhotonLib on the
+> robot. NAPA is Copyright (c) 2026 Zachary Wilson and is included under the GPL-3.0-only (see
 > [ExternalLicenses/NAPA-NOTICE](ExternalLicenses/NAPA-NOTICE)).
 
 [![Discord](https://img.shields.io/discord/725836368059826228?color=%23738ADB&label=Join%20our%20Discord&logo=discord&logoColor=white)](https://discord.gg/wYxTwym)
