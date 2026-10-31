@@ -6,6 +6,7 @@ generatedFileExclude {
   photon-lib/py/photonlibpy/generated/
   photon-targeting/src/generated/
   photon-targeting/src/main/native/cpp/photon/constrained_solvepnp/generate/
+  photon-targeting/src/main/native/napa/
   photon-serde-tests/src
   photon-serde-tests/py
 }
