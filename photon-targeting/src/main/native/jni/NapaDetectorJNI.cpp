@@ -98,7 +98,8 @@ Java_org_photonvision_jni_NapaDetectorJni_detect
 
   napa_params params{minTagPx, maxHamming, minContrast, minBorderCells,
                      sharpeningX100};
-  std::vector<napa_detection> detections(kMaxDetections);
+  // Reused across frames: each camera runs its pipeline on one thread
+  thread_local std::vector<napa_detection> detections(kMaxDetections);
   int count =
       napa_detect(detector, reinterpret_cast<const uint8_t*>(dataAddr), width,
                   height, stride, &params, detections.data(), kMaxDetections);
