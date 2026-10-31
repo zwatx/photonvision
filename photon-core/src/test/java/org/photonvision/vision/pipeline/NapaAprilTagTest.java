@@ -62,15 +62,14 @@ public class NapaAprilTagTest {
         ConfigProvider.getInstance().load();
     }
 
-    // Not kTag1_16h5_1280: NAPA misses its tag at the default napaMinTagPx. The tag is on a dim phone
-    // screen whose white margin is about a cell wide against a dark hand, and on the coarse grid
-    // NAPA uses for large tags the margin falls between samples (NAPA's documented quiet-zone limit).
     static Stream<Arguments> images() {
         Supplier<CameraCalibrationCoefficients> lifeCam = () -> TestUtils.get2020LifeCamCoeffs(false);
         Supplier<CameraCalibrationCoefficients> limelight =
                 () -> TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false);
         return Stream.of(
                 Arguments.of(TestUtils.ApriltagTestImages.kTag1_640_480, AprilTagFamily.kTag36h11, lifeCam),
+                Arguments.of(
+                        TestUtils.ApriltagTestImages.kTag1_16h5_1280, AprilTagFamily.kTag16h5, limelight),
                 Arguments.of(
                         TestUtils.ApriltagTestImages.kTag_corner_1280, AprilTagFamily.kTag16h5, limelight),
                 Arguments.of(
@@ -216,7 +215,7 @@ public class NapaAprilTagTest {
                 (AprilTagPipelineSettings)
                         Jsonb.instance().type(CVPipelineSettings.class).fromJson(upstreamJson);
         assertEquals(AprilTagDetectorType.kNapa, loaded.detector);
-        assertEquals(32, loaded.napaMinTagPx);
+        assertEquals(16, loaded.napaMinTagPx);
     }
 
     @Test

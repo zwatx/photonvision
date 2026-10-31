@@ -306,7 +306,7 @@ export const DefaultAprilTagPipelineSettings: AprilTagPipelineSettings = {
   threads: 4,
   tagFamily: AprilTagFamily.Family36h11,
   detector: AprilTagDetectorType.Napa,
-  napaMinTagPx: 32,
+  napaMinTagPx: 16,
   doMultiTarget: false,
   doSingleTargetAlways: false
 };

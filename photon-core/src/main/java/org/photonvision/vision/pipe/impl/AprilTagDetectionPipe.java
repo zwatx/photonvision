@@ -75,10 +75,12 @@ public class AprilTagDetectionPipe
             String family = newParams.family().getNativeName();
             if (newParams.detector() == AprilTagDetectorType.kNapa
                     && (m_napaDetector == null || !m_napaDetector.getFamily().equals(family))) {
+                // Create the new detector first, so a failure leaves the old one usable
+                var napaDetector = new NapaTagDetector(family);
                 if (m_napaDetector != null) {
                     m_napaDetector.close();
                 }
-                m_napaDetector = new NapaTagDetector(family);
+                m_napaDetector = napaDetector;
             }
         }
 
