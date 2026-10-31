@@ -1,6 +1,6 @@
 # NAPA
 
-NAPA's C core, copied unchanged from [zwatx/NAPA](https://github.com/zwatx/NAPA) at commit `874a885`
+NAPA's C core, copied unchanged from [zwatx/NAPA](https://github.com/zwatx/NAPA) at commit `3424f56` (v0.5.1)
 (`src/napa_vision/_native`). It is compiled into `photontargeting` and called through
 `NapaDetectorJNI.cpp`.
 
