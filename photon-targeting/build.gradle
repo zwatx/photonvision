@@ -90,6 +90,13 @@ model {
                         include '**/*.cpp', '**/*.cc'
                     }
                 }
+                // NAPA's C core, vendored unchanged from https://github.com/zwatx/NAPA
+                c {
+                    source {
+                        srcDirs 'src/main/native/napa'
+                        include '**/*.c'
+                    }
+                }
             }
 
             binaries.all {
