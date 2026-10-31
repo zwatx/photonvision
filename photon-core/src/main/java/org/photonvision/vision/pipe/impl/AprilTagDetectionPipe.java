@@ -18,7 +18,9 @@
 package org.photonvision.vision.pipe.impl;
 
 import java.util.List;
+import org.photonvision.vision.apriltag.AprilTagDetectorType;
 import org.photonvision.vision.apriltag.AprilTagFamily;
+import org.photonvision.vision.apriltag.NapaTagDetector;
 import org.photonvision.vision.opencv.CVMat;
 import org.photonvision.vision.pipe.CVPipe;
 import org.wpilib.vision.apriltag.AprilTagDetection;
@@ -28,6 +30,8 @@ public class AprilTagDetectionPipe
         extends CVPipe<
                 CVMat, List<AprilTagDetection>, AprilTagDetectionPipe.AprilTagDetectionPipeParams> {
     private AprilTagDetector m_detector = new AprilTagDetector();
+    // Created when a pipeline first selects NAPA
+    private NapaTagDetector m_napaDetector;
 
     public AprilTagDetectionPipe() {
         super();
@@ -44,6 +48,10 @@ public class AprilTagDetectionPipe
 
         if (m_detector == null) {
             throw new RuntimeException("Apriltag detector was released!");
+        }
+
+        if (params.detector() == AprilTagDetectorType.kNapa) {
+            return m_napaDetector.detect(in.getMat(), params.napaMinTagPx());
         }
 
         var ret = m_detector.detect(in.getMat());
@@ -63,6 +71,15 @@ public class AprilTagDetectionPipe
 
             m_detector.clearFamilies();
             m_detector.addFamily(newParams.family().getNativeName());
+
+            String family = newParams.family().getNativeName();
+            if (newParams.detector() == AprilTagDetectorType.kNapa
+                    && (m_napaDetector == null || !m_napaDetector.getFamily().equals(family))) {
+                if (m_napaDetector != null) {
+                    m_napaDetector.close();
+                }
+                m_napaDetector = new NapaTagDetector(family);
+            }
         }
 
         super.setParams(newParams);
@@ -72,10 +89,20 @@ public class AprilTagDetectionPipe
     public void release() {
         m_detector.close();
         m_detector = null;
+        if (m_napaDetector != null) {
+            m_napaDetector.close();
+            m_napaDetector = null;
+        }
     }
 
+    /**
+     * @param detector the detector to run
+     * @param napaMinTagPx the smallest tag side, in pixels, NAPA is guaranteed to find
+     */
     public static record AprilTagDetectionPipeParams(
             AprilTagFamily family,
             AprilTagDetector.Config detectorParams,
-            AprilTagDetector.QuadThresholdParameters quadParams) {}
+            AprilTagDetector.QuadThresholdParameters quadParams,
+            AprilTagDetectorType detector,
+            int napaMinTagPx) {}
 }

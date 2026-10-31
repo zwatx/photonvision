@@ -17,11 +17,15 @@
 
 package org.photonvision.vision.pipeline;
 
+import org.photonvision.vision.apriltag.AprilTagDetectorType;
 import org.photonvision.vision.apriltag.AprilTagFamily;
 import org.photonvision.vision.target.TargetModel;
 
 public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
     public AprilTagFamily tagFamily = AprilTagFamily.kTag36h11;
+    public AprilTagDetectorType detector = AprilTagDetectorType.kNapa;
+    // NAPA finds every tag at least this many pixels across; smaller values cost more time
+    public int napaMinTagPx = 32;
     public int decimate = 1;
     public double blur = 0;
     public int threads = 4; // Multiple threads seems to be better performance on most platforms
@@ -49,6 +53,8 @@ public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
         final int prime = 31;
         int result = super.hashCode();
         result = prime * result + ((tagFamily == null) ? 0 : tagFamily.hashCode());
+        result = prime * result + ((detector == null) ? 0 : detector.hashCode());
+        result = prime * result + napaMinTagPx;
         result = prime * result + decimate;
         long temp;
         temp = Double.doubleToLongBits(blur);
@@ -71,6 +77,8 @@ public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
         if (getClass() != obj.getClass()) return false;
         AprilTagPipelineSettings other = (AprilTagPipelineSettings) obj;
         if (tagFamily != other.tagFamily) return false;
+        if (detector != other.detector) return false;
+        if (napaMinTagPx != other.napaMinTagPx) return false;
         if (decimate != other.decimate) return false;
         if (Double.doubleToLongBits(blur) != Double.doubleToLongBits(other.blur)) return false;
         if (threads != other.threads) return false;
