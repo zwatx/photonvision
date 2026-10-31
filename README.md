@@ -1,5 +1,12 @@
 # PhotonVision
 
+> [!NOTE]
+> This fork adds [NAPA](https://github.com/zwatx/NAPA), a faster AprilTag detector, to PhotonVision's AprilTag
+> pipeline. Pick it under **Detector** in the AprilTag tab; it is the default for new and existing pipelines here, and
+> **AprilTag** switches back to WPILib's detector. NAPA's **Min Tag Size** replaces decimate: NAPA finds every tag at
+> least that many pixels across. NAPA is Copyright (c) 2026 Zachary Wilson and is included under the GPL-3.0-only (see
+> [ExternalLicenses/NAPA-NOTICE](ExternalLicenses/NAPA-NOTICE)).
+
 [![Discord](https://img.shields.io/discord/725836368059826228?color=%23738ADB&label=Join%20our%20Discord&logo=discord&logoColor=white)](https://discord.gg/wYxTwym)
 
 PhotonVision is the free, fast, and easy-to-use computer vision solution for the *FIRST* Robotics Competition. You can read an overview of our features [on our website](https://photonvision.org). You can find our comprehensive documentation [here](https://docs.photonvision.org).
