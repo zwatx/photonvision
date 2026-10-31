@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { PipelineType, type AprilTagPipelineSettings, AprilTagFamily } from "@/types/PipelineTypes";
+import {
+  PipelineType,
+  type AprilTagPipelineSettings,
+  AprilTagDetectorType,
+  AprilTagFamily
+} from "@/types/PipelineTypes";
 import PvSelect from "@/components/common/pv-select.vue";
 import PvSlider from "@/components/common/pv-slider.vue";
 import PvSwitch from "@/components/common/pv-switch.vue";
@@ -17,10 +22,22 @@ const { mdAndDown } = useDisplay();
 const interactiveCols = computed(() =>
   mdAndDown.value && (!useStateStore().sidebarFolded || useCameraSettingsStore().isDriverMode) ? 8 : 7
 );
+const usingNapa = computed(() => currentPipelineSettings.value.detector === AprilTagDetectorType.Napa);
 </script>
 
 <template>
   <div v-if="currentPipelineSettings.pipelineType === PipelineType.AprilTag">
+    <pv-select
+      v-model="currentPipelineSettings.detector"
+      label="Detector"
+      tooltip="NAPA is faster and finds smaller tags. AprilTag is the upstream detector WPILib uses."
+      :items="[
+        { value: AprilTagDetectorType.Napa, name: 'NAPA' },
+        { value: AprilTagDetectorType.AprilTag, name: 'AprilTag' }
+      ]"
+      :select-cols="interactiveCols"
+      @update:modelValue="(value) => useCameraSettingsStore().changeCurrentPipelineSetting({ detector: value }, false)"
+    />
     <pv-select
       v-model="currentPipelineSettings.tagFamily"
       label="Target family"
@@ -32,6 +49,19 @@ const interactiveCols = computed(() =>
       @update:modelValue="(value) => useCameraSettingsStore().changeCurrentPipelineSetting({ tagFamily: value }, false)"
     />
     <pv-slider
+      v-if="usingNapa"
+      v-model="currentPipelineSettings.napaMinTagPx"
+      :slider-cols="interactiveCols"
+      label="Min Tag Size"
+      tooltip="NAPA finds every tag at least this many pixels across. Lower values find smaller, farther tags but take longer."
+      :min="8"
+      :max="128"
+      @update:modelValue="
+        (value) => useCameraSettingsStore().changeCurrentPipelineSetting({ napaMinTagPx: value }, false)
+      "
+    />
+    <pv-slider
+      v-if="!usingNapa"
       v-model="currentPipelineSettings.decimate"
       :slider-cols="interactiveCols"
       label="Decimate"
@@ -41,6 +71,7 @@ const interactiveCols = computed(() =>
       @update:modelValue="(value) => useCameraSettingsStore().changeCurrentPipelineSetting({ decimate: value }, false)"
     />
     <pv-slider
+      v-if="!usingNapa"
       v-model="currentPipelineSettings.blur"
       :slider-cols="interactiveCols"
       label="Blur"
@@ -51,6 +82,7 @@ const interactiveCols = computed(() =>
       @update:modelValue="(value) => useCameraSettingsStore().changeCurrentPipelineSetting({ blur: value }, false)"
     />
     <pv-slider
+      v-if="!usingNapa"
       v-model="currentPipelineSettings.threads"
       :slider-cols="interactiveCols"
       label="Threads"
@@ -82,6 +114,7 @@ const interactiveCols = computed(() =>
       "
     />
     <pv-switch
+      v-if="!usingNapa"
       v-model="currentPipelineSettings.refineEdges"
       :switch-cols="interactiveCols"
       label="Refine Edges"

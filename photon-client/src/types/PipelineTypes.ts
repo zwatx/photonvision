@@ -19,6 +19,11 @@ export enum AprilTagFamily {
   Family16h5 = 1
 }
 
+export enum AprilTagDetectorType {
+  AprilTag = 0,
+  Napa = 1
+}
+
 export enum RobotOffsetPointMode {
   None = 0,
   Single = 1,
@@ -274,6 +279,8 @@ export interface AprilTagPipelineSettings extends PipelineSettings {
   debug: boolean;
   threads: number;
   tagFamily: AprilTagFamily;
+  detector: AprilTagDetectorType;
+  napaMinTagPx: number;
   doMultiTarget: boolean;
   doSingleTargetAlways: boolean;
 }
@@ -298,6 +305,8 @@ export const DefaultAprilTagPipelineSettings: AprilTagPipelineSettings = {
   debug: false,
   threads: 4,
   tagFamily: AprilTagFamily.Family36h11,
+  detector: AprilTagDetectorType.Napa,
+  napaMinTagPx: 32,
   doMultiTarget: false,
   doSingleTargetAlways: false
 };
