@@ -1,7 +1,7 @@
 Third-party notices
 
-Napa is licensed under the GPL-3.0-only or a commercial license (see LICENSE and NOTICE). The parts below come from
-other projects and keep their own licenses.
+Napa is licensed under the GPL-3.0-only or a commercial license (see LICENSE and NAPA-NOTICE). The parts below come
+from other projects and keep their own licenses.
 
 ------------------------------------------------------------------------------------------------------------
 Tag family codewords and layouts (src/napa_vision/_native/families/*.h)
