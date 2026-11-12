@@ -149,40 +149,73 @@ public class NapaAprilTagTest {
             AprilTagFamily family,
             Supplier<CameraCalibrationCoefficients> calibration,
             AprilTagDetectorType detector) {
-        List<Tag> tags = new ArrayList<>();
         try (var pipeline = new AprilTagPipeline()) {
             pipeline.getSettings().solvePNPEnabled = true;
-            pipeline.getSettings().tagFamily = family;
-            pipeline.getSettings().detector = detector;
             pipeline.getSettings().outputMaximumTargets = 1000;
+            return run(pipeline, image, family, calibration, detector);
+        }
+    }
 
-            try (var frameProvider =
-                    new FileFrameProvider(
-                            TestUtils.getApriltagImagePath(image, false),
-                            TestUtils.WPI2020Image.FOV,
-                            calibration.get())) {
-                frameProvider.requestFrameThresholdType(pipeline.getThresholdType());
-                try (CVPipelineResult result =
-                        pipeline.run(frameProvider.get(), QuirkyCamera.DefaultCamera)) {
-                    for (var target : result.targets) {
-                        var corners = List.copyOf(target.getTargetCorners());
-                        double x = 0;
-                        double y = 0;
-                        for (Point corner : corners) {
-                            x += corner.x / 4;
-                            y += corner.y / 4;
-                        }
-                        tags.add(
-                                new Tag(
-                                        target.getFiducialId(),
-                                        corners,
-                                        new Point(x, y),
-                                        target.getBestCameraToTarget3d()));
+    private static List<Tag> run(
+            AprilTagPipeline pipeline,
+            TestUtils.ApriltagTestImages image,
+            AprilTagFamily family,
+            Supplier<CameraCalibrationCoefficients> calibration,
+            AprilTagDetectorType detector) {
+        pipeline.getSettings().tagFamily = family;
+        pipeline.getSettings().detector = detector;
+        List<Tag> tags = new ArrayList<>();
+        try (var frameProvider =
+                new FileFrameProvider(
+                        TestUtils.getApriltagImagePath(image, false),
+                        TestUtils.WPI2020Image.FOV,
+                        calibration.get())) {
+            frameProvider.requestFrameThresholdType(pipeline.getThresholdType());
+            try (CVPipelineResult result =
+                    pipeline.run(frameProvider.get(), QuirkyCamera.DefaultCamera)) {
+                for (var target : result.targets) {
+                    var corners = List.copyOf(target.getTargetCorners());
+                    double x = 0;
+                    double y = 0;
+                    for (Point corner : corners) {
+                        x += corner.x / 4;
+                        y += corner.y / 4;
                     }
+                    tags.add(
+                            new Tag(
+                                    target.getFiducialId(),
+                                    corners,
+                                    new Point(x, y),
+                                    target.getBestCameraToTarget3d()));
                 }
             }
         }
         return tags;
+    }
+
+    @Test
+    public void testSwitchingDetectorsAndFamilies() {
+        // One pipeline switching detector and family gives what a fresh pipeline gives for each
+        // setting: NAPA, AprilTag, NAPA again, then NAPA with another family.
+        var tag36h11 = TestUtils.ApriltagTestImages.kTag1_640_480;
+        var tag16h5 = TestUtils.ApriltagTestImages.kTag1_16h5_1280;
+        Supplier<CameraCalibrationCoefficients> lifeCam = () -> TestUtils.get2020LifeCamCoeffs(false);
+        Supplier<CameraCalibrationCoefficients> limelight =
+                () -> TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false);
+        var napa = AprilTagDetectorType.kNapa;
+        var aprilTag = AprilTagDetectorType.kAprilTag;
+        try (var pipeline = new AprilTagPipeline()) {
+            pipeline.getSettings().solvePNPEnabled = true;
+            pipeline.getSettings().outputMaximumTargets = 1000;
+            for (var detector : List.of(napa, aprilTag, napa)) {
+                List<Tag> tags = run(pipeline, tag36h11, AprilTagFamily.kTag36h11, lifeCam, detector);
+                assertFalse(tags.isEmpty(), detector + " found no tags");
+                assertEquals(detect(tag36h11, AprilTagFamily.kTag36h11, lifeCam, detector), tags);
+            }
+            List<Tag> tags = run(pipeline, tag16h5, AprilTagFamily.kTag16h5, limelight, napa);
+            assertFalse(tags.isEmpty(), "NAPA found no tag16h5 tags");
+            assertEquals(detect(tag16h5, AprilTagFamily.kTag16h5, limelight, napa), tags);
+        }
     }
 
     @Test
