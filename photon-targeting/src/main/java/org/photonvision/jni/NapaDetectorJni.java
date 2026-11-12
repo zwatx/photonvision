@@ -25,6 +25,12 @@ public class NapaDetectorJni {
     /** Values per tag in {@link #detect}'s result: ID, hamming, decision margin, 8 corner values. */
     public static final int kValuesPerDetection = 11;
 
+    /** {@link #setLens}'s model for no lens: tag sides are fitted in pixels. */
+    public static final int kLensNone = 0;
+
+    /** {@link #setLens}'s model for OpenCV's lens model (Brown-Conrady). */
+    public static final int kLensBrownConrady = 1;
+
     /**
      * Creates a detector for one tag family, such as "tag36h11" or "tag16h5".
      *
@@ -43,13 +49,36 @@ public class NapaDetectorJni {
     public static native void destroy(long handle);
 
     /**
+     * Sets how many threads one {@link #detect} call may use: the calling thread plus {@code threads
+     * - 1} workers the detector owns. Results are the same at every count; only latency changes.
+     *
+     * @param threads 1 to 16
+     * @return 0, -1 if the count is invalid, or -2 if the threads couldn't be started (the previous
+     *     setting stays)
+     */
+    public static native int setThreads(long handle, int threads);
+
+    /**
+     * Sets the camera's lens from its calibration, in OpenCV's conventions. Tag sides are then fitted
+     * as straight lines through the lens, and corners mapped back to pixels; the image isn't
+     * remapped.
+     *
+     * @param model {@link #kLensNone} to clear it, or {@link #kLensBrownConrady}
+     * @param intrinsics fx, fy, cx, cy, skew
+     * @param coefficients OpenCV's distortion coefficients: 4, 5, 8, 12 or 14 of them (tilt terms 0)
+     * @return 0, or -1 if the lens is invalid
+     */
+    public static native int setLens(
+            long handle, int model, double[] intrinsics, double[] coefficients);
+
+    /**
      * Detects tags in an 8-bit grayscale image.
      *
      * @param dataAddr the address of the image's first pixel
      * @param stride bytes from one row to the next
      * @return {@link #kValuesPerDetection} values per tag, its corners as x, y pairs in OpenCV's
-     *     order with (0, 0) at the centre of the top-left pixel; or null if the image or parameters
-     *     are invalid
+     *     order with (0, 0) at the center of the top-left pixel; or null if the image or parameters
+     *     are invalid, or NAPA ran out of memory
      */
     public static native double[] detect(
             long handle,
