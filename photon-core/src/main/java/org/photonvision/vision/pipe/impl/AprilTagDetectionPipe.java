@@ -31,7 +31,7 @@ public class AprilTagDetectionPipe
         extends CVPipe<
                 CVMat, List<AprilTagDetection>, AprilTagDetectionPipe.AprilTagDetectionPipeParams> {
     private AprilTagDetector m_detector = new AprilTagDetector();
-    // Created when a pipeline first selects NAPA
+    // Exists only while the pipeline uses NAPA
     private NapaTagDetector m_napaDetector;
 
     public AprilTagDetectionPipe() {
@@ -89,6 +89,10 @@ public class AprilTagDetectionPipe
                     }
                     m_napaDetector = napaDetector;
                 }
+            } else if (m_napaDetector != null) {
+                // Free NAPA's worker threads and buffers while AprilTag runs
+                m_napaDetector.close();
+                m_napaDetector = null;
             }
         }
 
