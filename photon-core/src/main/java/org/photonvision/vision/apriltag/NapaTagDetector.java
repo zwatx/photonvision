@@ -71,7 +71,8 @@ public class NapaTagDetector implements AutoCloseable {
     public NapaTagDetector(String family) {
         m_handle = NapaDetectorJni.create(family);
         if (m_handle == 0) {
-            throw new IllegalArgumentException("NAPA doesn't support the tag family " + family);
+            throw new IllegalArgumentException(
+                    "NAPA couldn't create a detector for the tag family " + family);
         }
         m_family = family;
         m_maxHamming = NapaDetectorJni.recommendedHamming(family);
