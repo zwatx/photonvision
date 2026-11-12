@@ -34,7 +34,7 @@ public class NapaDetectorJni {
     /**
      * Creates a detector for one tag family, such as "tag36h11" or "tag16h5".
      *
-     * @return a handle, or 0 if the family is unknown
+     * @return a handle, or 0 if the family is unknown or memory runs out
      */
     public static native long create(String family);
 
