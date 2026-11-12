@@ -17,7 +17,7 @@
 
 package org.photonvision.vision.apriltag;
 
-/** The detector an AprilTag pipeline runs. */
+/** The detector an AprilTag pipeline runs. PipelineTypes.ts mirrors its ordinals. */
 public enum AprilTagDetectorType {
     /** WPILib's AprilTagDetector, built on upstream AprilTag 3. */
     kAprilTag,

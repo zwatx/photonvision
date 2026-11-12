@@ -21,6 +21,7 @@ import java.util.List;
 import org.photonvision.vision.apriltag.AprilTagDetectorType;
 import org.photonvision.vision.apriltag.AprilTagFamily;
 import org.photonvision.vision.apriltag.NapaTagDetector;
+import org.photonvision.vision.calibration.CameraCalibrationCoefficients;
 import org.photonvision.vision.opencv.CVMat;
 import org.photonvision.vision.pipe.CVPipe;
 import org.wpilib.vision.apriltag.AprilTagDetection;
@@ -72,15 +73,22 @@ public class AprilTagDetectionPipe
             m_detector.clearFamilies();
             m_detector.addFamily(newParams.family().getNativeName());
 
-            String family = newParams.family().getNativeName();
-            if (newParams.detector() == AprilTagDetectorType.kNapa
-                    && (m_napaDetector == null || !m_napaDetector.getFamily().equals(family))) {
-                // Create the new detector first, so a failure leaves the old one usable
-                var napaDetector = new NapaTagDetector(family);
-                if (m_napaDetector != null) {
-                    m_napaDetector.close();
+            if (newParams.detector() == AprilTagDetectorType.kNapa) {
+                String family = newParams.family().getNativeName();
+                // A new family needs a new detector: create it first, so a failure leaves the old one
+                // in use
+                var napaDetector =
+                        m_napaDetector != null && m_napaDetector.getFamily().equals(family)
+                                ? m_napaDetector
+                                : new NapaTagDetector(family);
+                napaDetector.setThreads(newParams.detectorParams().numThreads);
+                napaDetector.setCalibration(newParams.calibration());
+                if (napaDetector != m_napaDetector) {
+                    if (m_napaDetector != null) {
+                        m_napaDetector.close();
+                    }
+                    m_napaDetector = napaDetector;
                 }
-                m_napaDetector = napaDetector;
             }
         }
 
@@ -98,13 +106,18 @@ public class AprilTagDetectionPipe
     }
 
     /**
+     * @param detectorParams AprilTag's settings; NAPA uses only their thread count
      * @param detector the detector to run
      * @param napaMinTagPx the smallest tag side, in pixels, NAPA is guaranteed to find
+     * @param calibration the camera's calibration at the current resolution, or null; NAPA fits tag
+     *     sides through its lens. Compared by reference: FrameStaticProperties keeps the same
+     *     instance from frame to frame.
      */
     public static record AprilTagDetectionPipeParams(
             AprilTagFamily family,
             AprilTagDetector.Config detectorParams,
             AprilTagDetector.QuadThresholdParameters quadParams,
             AprilTagDetectorType detector,
-            int napaMinTagPx) {}
+            int napaMinTagPx,
+            CameraCalibrationCoefficients calibration) {}
 }
