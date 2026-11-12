@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -27,6 +28,9 @@ namespace {
 constexpr int kMaxDetections = 1024;
 constexpr int kValuesPerDetection =
     org_photonvision_jni_NapaDetectorJni_kValuesPerDetection;
+static_assert(org_photonvision_jni_NapaDetectorJni_kLensNone == NAPA_LENS_NONE);
+static_assert(org_photonvision_jni_NapaDetectorJni_kLensBrownConrady ==
+              NAPA_LENS_BROWN_CONRADY);
 }  // namespace
 
 extern "C" {
@@ -82,6 +86,47 @@ Java_org_photonvision_jni_NapaDetectorJni_destroy
 
 /*
  * Class:     org_photonvision_jni_NapaDetectorJni
+ * Method:    setThreads
+ * Signature: (JI)I
+ */
+JNIEXPORT jint JNICALL
+Java_org_photonvision_jni_NapaDetectorJni_setThreads
+  (JNIEnv*, jclass, jlong handle, jint threads)
+{
+  auto* detector = reinterpret_cast<napa_detector*>(handle);
+  return detector ? napa_set_threads(detector, threads) : -1;
+}
+
+/*
+ * Class:     org_photonvision_jni_NapaDetectorJni
+ * Method:    setLens
+ * Signature: (JI[D[D)I
+ */
+JNIEXPORT jint JNICALL
+Java_org_photonvision_jni_NapaDetectorJni_setLens
+  (JNIEnv* env, jclass, jlong handle, jint model, jdoubleArray intrinsics,
+   jdoubleArray coefficients)
+{
+  auto* detector = reinterpret_cast<napa_detector*>(handle);
+  if (!detector) {
+    return -1;
+  }
+  if (model == NAPA_LENS_NONE) {
+    return napa_set_lens(detector, NAPA_LENS_NONE, nullptr, nullptr, 0);
+  }
+  if (!intrinsics || !coefficients || env->GetArrayLength(intrinsics) != 5) {
+    return -1;
+  }
+  double k[5];
+  env->GetDoubleArrayRegion(intrinsics, 0, 5, k);
+  std::vector<double> d(env->GetArrayLength(coefficients));
+  env->GetDoubleArrayRegion(coefficients, 0, d.size(), d.data());
+  return napa_set_lens(detector, model, k, d.data(),
+                       static_cast<int>(d.size()));
+}
+
+/*
+ * Class:     org_photonvision_jni_NapaDetectorJni
  * Method:    detect
  * Signature: (JJIIIIIIII)[D
  */
@@ -96,9 +141,14 @@ Java_org_photonvision_jni_NapaDetectorJni_detect
     return nullptr;
   }
 
-  napa_params params{minTagPx, maxHamming, minContrast, minBorderCells,
-                     sharpeningX100};
-  // Reused across frames: each camera runs its pipeline on one thread
+  const napa_params params{.min_tag_px = minTagPx,
+                           .max_hamming = maxHamming,
+                           .min_contrast = minContrast,
+                           .min_border_cells = minBorderCells,
+                           .sharpening_x100 = sharpeningX100,
+                           .split_touching = 0};
+  // One buffer per calling thread, reused across frames: the results are
+  // copied out before the call returns.
   thread_local std::vector<napa_detection> detections(kMaxDetections);
   int count =
       napa_detect(detector, reinterpret_cast<const uint8_t*>(dataAddr), width,
@@ -107,21 +157,19 @@ Java_org_photonvision_jni_NapaDetectorJni_detect
     return nullptr;
   }
 
-  std::vector<double> values;
-  values.reserve(static_cast<size_t>(count) * kValuesPerDetection);
-  for (int i = 0; i < count; i++) {
-    const napa_detection& detection = detections[i];
-    values.push_back(detection.id);
-    values.push_back(detection.hamming);
-    values.push_back(detection.decision_margin);
-    values.insert(values.end(), detection.corners, detection.corners + 8);
-  }
-
-  jdoubleArray result = env->NewDoubleArray(values.size());
+  jdoubleArray result = env->NewDoubleArray(count * kValuesPerDetection);
   if (!result) {
     return nullptr;
   }
-  env->SetDoubleArrayRegion(result, 0, values.size(), values.data());
+  for (int i = 0; i < count; i++) {
+    const napa_detection& detection = detections[i];
+    double values[kValuesPerDetection] = {
+        static_cast<double>(detection.id),
+        static_cast<double>(detection.hamming), detection.decision_margin};
+    std::copy(detection.corners, detection.corners + 8, values + 3);
+    env->SetDoubleArrayRegion(result, i * kValuesPerDetection,
+                              kValuesPerDetection, values);
+  }
   return result;
 }
 
