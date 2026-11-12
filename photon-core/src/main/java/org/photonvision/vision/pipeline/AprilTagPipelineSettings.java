@@ -24,8 +24,8 @@ import org.photonvision.vision.target.TargetModel;
 public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
     public AprilTagFamily tagFamily = AprilTagFamily.kTag36h11;
     public AprilTagDetectorType detector = AprilTagDetectorType.kNapa;
-    // NAPA finds every tag at least this many pixels across; smaller values cost more time. At 16,
-    // NAPA's benchmark found every tag down to 12 px, about as small as AprilTag at decimate 1.
+    // NAPA finds every tag at least this many pixels across; smaller values find smaller tags and
+    // cost more time.
     public int napaMinTagPx = 16;
     public int decimate = 1;
     public double blur = 0;

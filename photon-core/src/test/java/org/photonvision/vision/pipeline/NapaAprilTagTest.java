@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.avaje.jsonb.Jsonb;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -38,6 +39,7 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.photonvision.common.LoadJNI;
 import org.photonvision.common.configuration.ConfigProvider;
@@ -47,14 +49,16 @@ import org.photonvision.vision.apriltag.AprilTagDetectorType;
 import org.photonvision.vision.apriltag.AprilTagFamily;
 import org.photonvision.vision.apriltag.NapaTagDetector;
 import org.photonvision.vision.calibration.CameraCalibrationCoefficients;
+import org.photonvision.vision.calibration.CameraLensModel;
 import org.photonvision.vision.camera.QuirkyCamera;
 import org.photonvision.vision.frame.provider.FileFrameProvider;
 import org.photonvision.vision.pipeline.result.CVPipelineResult;
 import org.wpilib.math.geometry.Transform3d;
+import org.wpilib.vision.apriltag.AprilTagDetection;
 
 /** NAPA, run through the AprilTag pipeline, against WPILib's AprilTagDetector. */
 public class NapaAprilTagTest {
-    private record Tag(int id, List<Point> corners, Point centre, Transform3d pose) {}
+    private record Tag(int id, List<Point> corners, Point center, Transform3d pose) {}
 
     @BeforeEach
     public void setup() {
@@ -78,7 +82,7 @@ public class NapaAprilTagTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("images")
-    public void testNapaFindsAprilTagsTags(
+    public void testNapaMatchesAprilTag(
             TestUtils.ApriltagTestImages image,
             AprilTagFamily family,
             Supplier<CameraCalibrationCoefficients> calibration) {
@@ -100,7 +104,7 @@ public class NapaAprilTagTest {
             Tag actual = null;
             double nearest = 5;
             for (Tag candidate : napa) {
-                double distance = distance(expected.centre(), candidate.centre());
+                double distance = distance(expected.center(), candidate.center());
                 if (candidate.id() == expected.id() && distance < nearest) {
                     actual = candidate;
                     nearest = distance;
@@ -184,7 +188,7 @@ public class NapaAprilTagTest {
     @Test
     public void testDetectorReportsUpstreamConventions() {
         // The homography maps upstream's tag coordinates onto the corners, and its last column is
-        // the tag's centre.
+        // the tag's center.
         double[] corners = {100.5, 300.5, 300.5, 300.5, 300.5, 100.5, 100.5, 100.5};
         double[] h = NapaTagDetector.homography(corners);
         double[][] tagPoints = {{-1, 1}, {1, 1}, {1, -1}, {-1, -1}};
@@ -218,17 +222,122 @@ public class NapaAprilTagTest {
         assertEquals(16, loaded.napaMinTagPx);
     }
 
+    private static Mat grayImage(TestUtils.ApriltagTestImages image) {
+        return Imgcodecs.imread(
+                TestUtils.getApriltagImagePath(image, false).toString(), Imgcodecs.IMREAD_GRAYSCALE);
+    }
+
+    private static List<String> summary(List<AprilTagDetection> detections) {
+        return detections.stream()
+                .map(
+                        d ->
+                                d.getId()
+                                        + " "
+                                        + d.getHamming()
+                                        + " "
+                                        + d.getDecisionMargin()
+                                        + " "
+                                        + Arrays.toString(d.getCorners()))
+                .toList();
+    }
+
+    @Test
+    public void testThreadsFindTheSameTags() {
+        Mat image = grayImage(TestUtils.ApriltagTestImages.k36h11_stress_test);
+        try (var serial = new NapaTagDetector("tag36h11");
+                var threaded = new NapaTagDetector("tag36h11")) {
+            threaded.setThreads(4);
+            List<String> expected = summary(serial.detect(image, 16));
+            assertTrue(expected.size() > 100);
+            assertEquals(expected, summary(threaded.detect(image, 16)));
+            assertEquals(expected, summary(threaded.detect(image, 16))); // reused worker buffers
+        } finally {
+            image.release();
+        }
+    }
+
+    private static CameraCalibrationCoefficients withLensModel(
+            CameraCalibrationCoefficients calibration, CameraLensModel model) {
+        return new CameraCalibrationCoefficients(
+                calibration.resolution,
+                calibration.cameraIntrinsics,
+                calibration.distCoeffs,
+                calibration.calobjectWarp,
+                calibration.observations,
+                calibration.calobjectSize,
+                calibration.calobjectSpacing,
+                model,
+                calibration.optimizationInputs);
+    }
+
+    private static double largestCornerMove(AprilTagDetection a, AprilTagDetection b) {
+        double[] p = a.getCorners();
+        double[] q = b.getCorners();
+        double largest = 0;
+        for (int k = 0; k < 8; k += 2) {
+            largest = Math.max(largest, Math.hypot(p[k] - q[k], p[k + 1] - q[k + 1]));
+        }
+        return largest;
+    }
+
+    @Test
+    public void testLensAppliesAtTheCalibrationsResolution() {
+        Mat image = grayImage(TestUtils.ApriltagTestImages.kTag_corner_1280);
+        Mat cropped = image.submat(0, 700, 0, 1270);
+        // Saved without a lens model, as calibrations were before mrcal: OpenCV's
+        var calibration = TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false);
+        try (var detector = new NapaTagDetector("tag16h5")) {
+            List<AprilTagDetection> plain = detector.detect(image, 16);
+            assertEquals(1, plain.size());
+
+            // This mild lens barely bends so small a tag (about 0.005 px), but it does move its corners
+            detector.setCalibration(calibration);
+            List<AprilTagDetection> throughLens = detector.detect(image, 16);
+            assertTrue(detector.isLensApplied());
+            assertEquals(plain.get(0).getId(), throughLens.get(0).getId());
+            double moved = largestCornerMove(plain.get(0), throughLens.get(0));
+            assertTrue(moved > 0 && moved < 1, "the lens moved a corner " + moved + " px");
+
+            // Another resolution fits in pixels; the calibrated one uses the lens again
+            detector.detect(cropped, 16);
+            assertFalse(detector.isLensApplied());
+            assertEquals(summary(throughLens), summary(detector.detect(image, 16)));
+            assertTrue(detector.isLensApplied());
+
+            // Clearing the calibration, or giving an mrcal model, while the lens is in use: exactly
+            // the results without one
+            detector.setCalibration(null);
+            assertEquals(summary(plain), summary(detector.detect(image, 16)));
+            assertFalse(detector.isLensApplied());
+            detector.setCalibration(withLensModel(calibration, CameraLensModel.LENSMODEL_OPENCV));
+            assertEquals(summary(throughLens), summary(detector.detect(image, 16)));
+            detector.setCalibration(withLensModel(calibration, CameraLensModel.LENSMODEL_STERIOGRAPHIC));
+            assertEquals(summary(plain), summary(detector.detect(image, 16)));
+            assertFalse(detector.isLensApplied());
+        } finally {
+            cropped.release();
+            image.release();
+            calibration.release(); // the copies share its matrices
+        }
+    }
+
     @Test
     public void testBlankAndTinyImages() {
+        var blank = new Mat(480, 640, CvType.CV_8UC1, new Scalar(128));
+        var tiny = new Mat(8, 8, CvType.CV_8UC1, new Scalar(0));
+        var color = new Mat(480, 640, CvType.CV_8UC3, new Scalar(0, 0, 0));
+        Mat view = blank.submat(5, 400, 5, 600);
         try (var detector = new NapaTagDetector("tag36h11")) {
-            var blank = new Mat(480, 640, CvType.CV_8UC1, new Scalar(128));
             assertTrue(detector.detect(blank, 32).isEmpty());
-            var tiny = new Mat(8, 8, CvType.CV_8UC1, new Scalar(0));
             assertTrue(detector.detect(tiny, 32).isEmpty());
-            var color = new Mat(480, 640, CvType.CV_8UC3, new Scalar(0, 0, 0));
             assertThrows(IllegalArgumentException.class, () -> detector.detect(color, 32));
             Imgproc.rectangle(blank, new Point(10, 10), new Point(20, 20), new Scalar(0));
-            assertTrue(detector.detect(blank.submat(5, 400, 5, 600), 32).isEmpty());
+            assertTrue(detector.detect(view, 32).isEmpty());
+        } finally {
+            view.release();
+            color.release();
+            tiny.release();
+            blank.release();
         }
         assertThrows(IllegalArgumentException.class, () -> new NapaTagDetector("tag99h99"));
     }
