@@ -19,6 +19,9 @@ export enum AprilTagFamily {
   Family16h5 = 1
 }
 
+/**
+ * The on-wire form of AprilTagDetectorType.java (the enum is serialized with `ordinal()`)
+ */
 export enum AprilTagDetectorType {
   AprilTag = 0,
   Napa = 1
