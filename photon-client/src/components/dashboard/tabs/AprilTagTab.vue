@@ -90,11 +90,10 @@ const usingNapa = computed(() => currentPipelineSettings.value.detector === Apri
       "
     />
     <pv-slider
-      v-if="!usingNapa"
       v-model="currentPipelineSettings.threads"
       :slider-cols="interactiveCols"
       label="Threads"
-      tooltip="Number of threads spawned by the AprilTag detector"
+      tooltip="Number of threads the detector uses for each frame"
       :min="1"
       :max="8"
       @update:modelValue="
