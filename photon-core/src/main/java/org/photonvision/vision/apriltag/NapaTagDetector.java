@@ -23,7 +23,11 @@ import org.ejml.data.SingularMatrixException;
 import org.ejml.simple.SimpleMatrix;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.photonvision.common.logging.LogGroup;
+import org.photonvision.common.logging.Logger;
 import org.photonvision.jni.NapaDetectorJni;
+import org.photonvision.vision.calibration.CameraCalibrationCoefficients;
+import org.photonvision.vision.calibration.CameraLensModel;
 import org.wpilib.vision.apriltag.AprilTagDetection;
 
 /**
@@ -32,10 +36,12 @@ import org.wpilib.vision.apriltag.AprilTagDetection;
  * tag coordinates.
  */
 public class NapaTagDetector implements AutoCloseable {
-    /** The smallest and largest values NAPA accepts for the minimum tag size. */
-    public static final int kMinTagPxLimit = 8;
+    private static final Logger logger = new Logger(NapaTagDetector.class, LogGroup.VisionModule);
 
-    public static final int kMaxTagPxLimit = 30000;
+    // The ranges napa_core.h accepts. The UI's sliders stay well inside them.
+    private static final int kSmallestMinTagPx = 8;
+    private static final int kLargestMinTagPx = 30000;
+    private static final int kMaxThreads = 16;
 
     // NAPA's defaults, as napa_vision.NapaDetector uses them
     private static final int kMinContrast = 20;
@@ -50,6 +56,14 @@ public class NapaTagDetector implements AutoCloseable {
     private final String m_family;
     private final int m_maxHamming;
     private long m_handle;
+    private int m_threads = 1;
+    // The last calibration passed to setCalibration, so repeated calls cost nothing
+    private CameraCalibrationCoefficients m_requestedCalibration;
+    // The calibration whose lens NAPA uses at that calibration's resolution: null without one, for an
+    // mrcal model, or once NAPA has rejected it
+    private CameraCalibrationCoefficients m_lensCalibration;
+    // Whether NAPA's lens is set now, for the last image's resolution
+    private boolean m_lensApplied;
 
     /**
      * @param family a tag family's native name, such as "tag36h11"
@@ -68,9 +82,91 @@ public class NapaTagDetector implements AutoCloseable {
     }
 
     /**
+     * Sets how many threads each detection may use. Results are the same at every count; only latency
+     * changes. If the threads can't be started, NAPA keeps the previous count.
+     *
+     * @param threads clamped to 1 through 16
+     */
+    public void setThreads(int threads) {
+        threads = Math.clamp(threads, 1, kMaxThreads);
+        if (threads == m_threads) {
+            return;
+        }
+        if (NapaDetectorJni.setThreads(m_handle, threads) == 0) {
+            m_threads = threads;
+        } else {
+            logger.warn("NAPA couldn't start " + threads + " threads; it keeps using " + m_threads);
+        }
+    }
+
+    /**
+     * Fits tag sides through the camera's lens, which straightens the corners of tags the lens bends.
+     * The lens applies to images at the calibration's resolution; others, a null calibration and
+     * mrcal models fit sides in pixels.
+     */
+    public void setCalibration(CameraCalibrationCoefficients calibration) {
+        if (calibration == m_requestedCalibration) {
+            return;
+        }
+        m_requestedCalibration = calibration;
+        m_lensCalibration = calibration != null && isOpenCvModel(calibration) ? calibration : null;
+        if (m_lensApplied) {
+            NapaDetectorJni.setLens(m_handle, NapaDetectorJni.kLensNone, null, null);
+            m_lensApplied = false;
+        }
+    }
+
+    /** Whether NAPA's lens is set, for the last image's resolution. */
+    public boolean isLensApplied() {
+        return m_lensApplied;
+    }
+
+    // Calibrations saved before lens models were recorded have none: they are OpenCV's, as the pose
+    // estimators assume.
+    private static boolean isOpenCvModel(CameraCalibrationCoefficients calibration) {
+        return calibration.lensmodel == null
+                || calibration.lensmodel == CameraLensModel.LENSMODEL_OPENCV;
+    }
+
+    // Sets or clears NAPA's lens for an image: a calibration holds only at its own resolution.
+    private void applyLens(Mat image) {
+        boolean wanted =
+                m_lensCalibration != null
+                        && m_lensCalibration.resolution.width == image.cols()
+                        && m_lensCalibration.resolution.height == image.rows();
+        if (wanted == m_lensApplied) {
+            return;
+        }
+        if (wanted) {
+            double[] k = m_lensCalibration.getIntrinsicsArr(); // the camera matrix, row by row
+            m_lensApplied =
+                    k.length == 9
+                            && NapaDetectorJni.setLens(
+                                            m_handle,
+                                            NapaDetectorJni.kLensBrownConrady,
+                                            new double[] {k[0], k[4], k[2], k[5], k[1]},
+                                            m_lensCalibration.getDistCoeffsArr())
+                                    == 0;
+            if (!m_lensApplied) {
+                logger.warn(
+                        "NAPA can't use this camera calibration's lens, so it fits tags in pixels: "
+                                + k.length
+                                + " camera matrix values, "
+                                + m_lensCalibration.getDistCoeffsArr().length
+                                + " distortion coefficients");
+                m_lensCalibration = null; // until the calibration changes
+            }
+        } else {
+            NapaDetectorJni.setLens(m_handle, NapaDetectorJni.kLensNone, null, null);
+            m_lensApplied = false;
+        }
+    }
+
+    /**
      * Detects tags in an 8-bit grayscale image.
      *
      * @param minTagPx the smallest tag side, in pixels, NAPA is guaranteed to find
+     * @throws IllegalStateException if NAPA fails on the image, such as when out of memory
      */
     public List<AprilTagDetection> detect(Mat image, int minTagPx) {
         if (m_handle == 0) {
@@ -79,9 +175,7 @@ public class NapaTagDetector implements AutoCloseable {
         if (image.type() != CvType.CV_8UC1) {
             throw new IllegalArgumentException("NAPA needs an 8-bit grayscale image");
         }
-        if (image.cols() < 16 || image.rows() < 16) {
-            return List.of();
-        }
+        applyLens(image);
 
         double[] values =
                 NapaDetectorJni.detect(
@@ -90,13 +184,14 @@ public class NapaTagDetector implements AutoCloseable {
                         image.cols(),
                         image.rows(),
                         (int) image.step1(0),
-                        Math.clamp(minTagPx, kMinTagPxLimit, kMaxTagPxLimit),
+                        Math.clamp(minTagPx, kSmallestMinTagPx, kLargestMinTagPx),
                         m_maxHamming,
                         kMinContrast,
                         kMinBorderCells,
                         kSharpeningX100);
         if (values == null) {
-            return List.of();
+            throw new IllegalStateException(
+                    "NAPA failed on a " + image.cols() + "x" + image.rows() + " image");
         }
 
         int count = values.length / NapaDetectorJni.kValuesPerDetection;
@@ -105,7 +200,7 @@ public class NapaTagDetector implements AutoCloseable {
             int offset = i * NapaDetectorJni.kValuesPerDetection;
             double[] corners = new double[8];
             for (int k = 0; k < 4; k++) {
-                int napaCorner = offset + 3 + 2 * kUpstreamOrder[k];
+                int napaCorner = offset + 3 + 2 * kUpstreamOrder[k]; // corners follow ID, hamming, margin
                 corners[2 * k] = values[napaCorner] + 0.5;
                 corners[2 * k + 1] = values[napaCorner + 1] + 0.5;
             }
@@ -122,7 +217,7 @@ public class NapaTagDetector implements AutoCloseable {
                             (int) values[offset + 1],
                             (float) values[offset + 2],
                             homography,
-                            homography[2],
+                            homography[2], // the tag's center, where the homography maps (0, 0)
                             homography[5],
                             corners));
         }
