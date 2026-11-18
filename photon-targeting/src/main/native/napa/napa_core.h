@@ -1,7 +1,7 @@
 /* NAPA. Copyright (c) 2026 Zachary Wilson.
  * SPDX-License-Identifier: GPL-3.0-only. Also available under a commercial license: see NOTICE.
  * Copies and works based on this file must keep this notice and credit Zachary Wilson. */
-/* Napa core: plain C ABI for the sparse-sampling AprilTag 36h11 detector. */
+/* Napa core: plain C ABI for the sparse-sampling AprilTag detector. */
 #ifndef NAPA_CORE_H
 #define NAPA_CORE_H
 
@@ -26,7 +26,8 @@ typedef struct {
     int min_border_cells; /* dark border cells required out of 28 (0-28) */
     int sharpening_x100;  /* cell sharpening strength x100 (0-100); upstream AprilTag uses 25 */
     int split_touching;   /* 1: also decode dark shapes that touch others only at a corner, as tags do in
-                           * AprilGrid boards and checkerboards; slower. 0 (the default): off */
+                           * AprilGrid boards and checkerboards; slower. 2: only on frames where a decoded tag
+                           * touches dark shapes at its corners, detecting those again with 1. 0 (the default): off */
 } napa_params;
 
 /* napa_detection.hamming of a tag read as a whole picture (napa_detect_soft): no bits were counted. */
@@ -53,6 +54,10 @@ typedef struct {
     int8_t x[64], y[64];
 } napa_family_layout;
 
+/* Size of the napa_params layout this library reads. Callers must use a matching header.
+ * Libraries predating this query require a rebuild to use split_touching. */
+NAPA_API int napa_params_size(void);
+
 /* A detector for tag36h11, the default family. */
 NAPA_API napa_detector *napa_create(void);
 /* A detector for one family by name ("tag36h11", "tag16h5", "tag25h9", "tag36h10", "tagStandard41h12",
@@ -67,15 +72,15 @@ NAPA_API int napa_family_code(const char *family, int id, uint64_t *code);
 NAPA_API void napa_destroy(napa_detector *det);
 /* Detect the detector's family of tags in an 8-bit grayscale image. Returns the number of detections written
  * (at most max_out), -1 on invalid input or parameters (see napa_params for ranges), or -2 if
- * allocation fails. A detector handle is not thread-safe; use one per thread or camera stream. */
+ * allocation fails. max_out must be nonnegative; out may be NULL only when max_out is zero.
+ * A detector handle is not thread-safe; use one per thread or camera stream. */
 NAPA_API int napa_detect(napa_detector *det, const uint8_t *img, int width, int height, int stride,
                          const napa_params *params, napa_detection *out, int max_out);
 /* Experimental shadow recovery: ordinary napa_detect results first, then exact-code detections
  * from a lower proposal threshold, up to max_out. Original corners are unchanged. Same errors as
  * napa_detect; on -2 the output is incomplete and must not be used. No extra search for families
  * whose exact-code chance-match rate exceeds the split recovery budget. Shadow recovery adds no
- * further napa_params changes; callers built before split_touching was added must rebuild against
- * this header. This new symbol requires an updated library. */
+ * further napa_params changes. Callers must build against the napa_params layout in this header. */
 NAPA_API int napa_detect_shadows(napa_detector *det, const uint8_t *img, int width, int height, int stride,
                                  const napa_params *params, napa_detection *out, int max_out);
 /* Recovery sampling minimum: 0 preserves full sensitivity; otherwise params->min_tag_px through
@@ -121,6 +126,11 @@ NAPA_API int napa_set_lens(napa_detector *det, int model, const double *intrinsi
 #define NAPA_TAG_SHAPE_TALL 1
 #define NAPA_TAG_SHAPE_WIDE 2
 NAPA_API int napa_set_tag_shape(napa_detector *det, int shape);
+/* 1: a small candidate (up to about 28 pixels) at the finest level that doesn't fit or read is regrown at full
+ * resolution and tried again in the same pass, at most 32 per pass. It finds small tags whose thin border comes apart
+ * when sampled every other pixel, for a few percent more time. 0 (the default) doesn't. Applies to every later call on
+ * this detector. 0, or -1 for another value. */
+NAPA_API int napa_set_regrow_small_tags(napa_detector *det, int on);
 /* An 8-bit greyscale copy of interleaved pixels, for napa_detect: with colour set, BGR (pixel_bytes 3) or BGRA (4) with
  * OpenCV's BGR2GRAY weights, giving exactly cv2.cvtColor's values; otherwise byte 0 of each pixel_bytes-byte pixel (1-4),
  * such as the luma of YUYV frames (pixel_bytes 2). stride and dst_stride are bytes per row. det, if not NULL, lends its
@@ -134,7 +144,8 @@ NAPA_API int napa_gray_from_pixels(napa_detector *det, const uint8_t *src, int w
 NAPA_API int napa_set_threads(napa_detector *det, int threads);
 /* A tag's mean border-width bias, in cells, at the given corners: positive when the black border reads narrow. If edge_cells is
  * not NULL it receives the width of the blurred outer edges in cells, or NaN if they could not be fitted. 0 on success, 1 if
- * nothing could be measured, -1 on invalid input. */
+ * nothing could be measured, -1 on invalid input. Width/height must be 2-30000, stride at least width,
+ * corners finite, and parameters within napa_params ranges. */
 NAPA_API int napa_border_bias_cells(napa_detector *det, const uint8_t *img, int width, int height, int stride, const napa_params *params,
                                     const double corners[8], double *bias_cells, double *edge_cells);
 /* The payload of tag36h11 tag `id` (0-586): the 6x6 cells inside the black border, row-major, most
