@@ -69,13 +69,14 @@ public class NapaTagDetector implements AutoCloseable {
      * @param family a tag family's native name, such as "tag36h11"
      */
     public NapaTagDetector(String family) {
-        m_handle = NapaDetectorJni.create(family);
+        // Before creating the detector, so a failure here can't leak it
+        m_maxHamming = NapaDetectorJni.recommendedHamming(family);
+        m_handle = m_maxHamming < 0 ? 0 : NapaDetectorJni.create(family);
         if (m_handle == 0) {
             throw new IllegalArgumentException(
                     "NAPA couldn't create a detector for the tag family " + family);
         }
         m_family = family;
-        m_maxHamming = NapaDetectorJni.recommendedHamming(family);
     }
 
     public String getFamily() {
@@ -89,6 +90,7 @@ public class NapaTagDetector implements AutoCloseable {
      * @param threads clamped to 1 through 16
      */
     public void setThreads(int threads) {
+        requireOpen();
         threads = Math.clamp(threads, 1, kMaxThreads);
         if (threads == m_threads) {
             return;
@@ -106,6 +108,7 @@ public class NapaTagDetector implements AutoCloseable {
      * mrcal models fit sides in pixels.
      */
     public void setCalibration(CameraCalibrationCoefficients calibration) {
+        requireOpen();
         if (calibration == m_requestedCalibration) {
             return;
         }
@@ -167,12 +170,12 @@ public class NapaTagDetector implements AutoCloseable {
      * Detects tags in an 8-bit grayscale image.
      *
      * @param minTagPx the smallest tag side, in pixels, NAPA is guaranteed to find
-     * @throws IllegalStateException if NAPA fails on the image, such as when out of memory
+     * @throws IllegalArgumentException if the image isn't 8-bit grayscale
+     * @throws IllegalStateException if the detector is closed, or NAPA fails on the image, such as
+     *     when out of memory
      */
     public List<AprilTagDetection> detect(Mat image, int minTagPx) {
-        if (m_handle == 0) {
-            throw new IllegalStateException("NAPA detector was closed");
-        }
+        requireOpen();
         if (image.type() != CvType.CV_8UC1) {
             throw new IllegalArgumentException("NAPA needs an 8-bit grayscale image");
         }
@@ -250,6 +253,12 @@ public class NapaTagDetector implements AutoCloseable {
         }
         homography[8] = 1;
         return homography;
+    }
+
+    private void requireOpen() {
+        if (m_handle == 0) {
+            throw new IllegalStateException("NAPA detector was closed");
+        }
     }
 
     @Override

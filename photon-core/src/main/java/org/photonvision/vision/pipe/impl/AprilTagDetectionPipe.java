@@ -75,8 +75,9 @@ public class AprilTagDetectionPipe
 
             if (newParams.detector() == AprilTagDetectorType.kNapa) {
                 String family = newParams.family().getNativeName();
-                // A new family needs a new detector: create it first, so a failure leaves the old one
-                // in use
+                // A new family needs a new detector, created before the old one is closed. Creating it
+                // fails only when NAPA is out of memory; this then throws on every frame until the
+                // settings change, and the old detector stays valid.
                 var napaDetector =
                         m_napaDetector != null && m_napaDetector.getFamily().equals(family)
                                 ? m_napaDetector

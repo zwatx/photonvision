@@ -17,7 +17,8 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <vector>
+#include <memory>
+#include <new>
 
 #include "../napa/napa_core.h"
 #include "org_photonvision_jni_NapaDetectorJni.h"
@@ -26,6 +27,8 @@ namespace {
 // Tags beyond this many in one frame are dropped. PhotonVision reports at most
 // 127 targets, but its stress-test image alone has 280.
 constexpr int kMaxDetections = 1024;
+// OpenCV's longest distortion model
+constexpr jsize kMaxDistortionCoefficients = 14;
 constexpr int kValuesPerDetection =
     org_photonvision_jni_NapaDetectorJni_kValuesPerDetection;
 static_assert(org_photonvision_jni_NapaDetectorJni_kLensNone == NAPA_LENS_NONE);
@@ -44,7 +47,7 @@ JNIEXPORT jlong JNICALL
 Java_org_photonvision_jni_NapaDetectorJni_create
   (JNIEnv* env, jclass, jstring family)
 {
-  const char* name = env->GetStringUTFChars(family, nullptr);
+  const char* name = family ? env->GetStringUTFChars(family, nullptr) : nullptr;
   if (!name) {
     return 0;
   }
@@ -62,7 +65,7 @@ JNIEXPORT jint JNICALL
 Java_org_photonvision_jni_NapaDetectorJni_recommendedHamming
   (JNIEnv* env, jclass, jstring family)
 {
-  const char* name = env->GetStringUTFChars(family, nullptr);
+  const char* name = family ? env->GetStringUTFChars(family, nullptr) : nullptr;
   if (!name) {
     return -1;
   }
@@ -117,12 +120,15 @@ Java_org_photonvision_jni_NapaDetectorJni_setLens
   if (!intrinsics || !coefficients || env->GetArrayLength(intrinsics) != 5) {
     return -1;
   }
+  jsize count = env->GetArrayLength(coefficients);
+  if (count > kMaxDistortionCoefficients) {
+    return -1;
+  }
   double k[5];
+  double d[kMaxDistortionCoefficients];
   env->GetDoubleArrayRegion(intrinsics, 0, 5, k);
-  std::vector<double> d(env->GetArrayLength(coefficients));
-  env->GetDoubleArrayRegion(coefficients, 0, d.size(), d.data());
-  return napa_set_lens(detector, model, k, d.data(),
-                       static_cast<int>(d.size()));
+  env->GetDoubleArrayRegion(coefficients, 0, count, d);
+  return napa_set_lens(detector, model, k, d, count);
 }
 
 /*
@@ -151,11 +157,18 @@ Java_org_photonvision_jni_NapaDetectorJni_detect
                            // shapes at its corners.
                            .split_touching = 2};
   // One buffer per calling thread, reused across frames: the results are
-  // copied out before the call returns.
-  thread_local std::vector<napa_detection> detections(kMaxDetections);
+  // copied out before the call returns. Allocated without throwing, as no C++
+  // exception may cross into Java.
+  thread_local std::unique_ptr<napa_detection[]> detections;
+  if (!detections) {
+    detections.reset(new (std::nothrow) napa_detection[kMaxDetections]);
+    if (!detections) {
+      return nullptr;
+    }
+  }
   int count =
       napa_detect(detector, reinterpret_cast<const uint8_t*>(dataAddr), width,
-                  height, stride, &params, detections.data(), kMaxDetections);
+                  height, stride, &params, detections.get(), kMaxDetections);
   if (count < 0) {
     return nullptr;
   }
