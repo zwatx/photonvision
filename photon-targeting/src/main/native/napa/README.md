@@ -1,9 +1,8 @@
 # NAPA
 
-NAPA's C core, copied unchanged from [zwatx/NAPA](https://github.com/zwatx/NAPA) (`src/napa_vision/_native`):
-branch `feat/consolidated-detector-review` at commit `8d5a569` (released as NAPA 0.6.0). It is compiled into `photontargetingJNI` and called
-through `NapaDetectorJNI.cpp`. [SHA256SUMS](SHA256SUMS) lists every copied file; check them with
-`sha256sum -c SHA256SUMS` in this folder.
+NAPA's C core, copied unchanged from [zwatx/NAPA](https://github.com/zwatx/NAPA) (`src/napa_vision/_native`) at
+commit `8d5a569` (NAPA 0.6.0). It is compiled into `photontargetingJNI` and called through `NapaDetectorJNI.cpp`.
+[SHA256SUMS](SHA256SUMS) lists every copied file; check them with `sha256sum -c SHA256SUMS` in this folder.
 
 NAPA is Copyright (c) 2026 Zachary Wilson and is used here under the GPL-3.0-only; see [NOTICE](NOTICE). The tag
 family codewords come from AprilTag under its BSD license; see [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
