@@ -252,7 +252,7 @@ public class NapaAprilTagTest {
                 (AprilTagPipelineSettings)
                         Jsonb.instance().type(CVPipelineSettings.class).fromJson(upstreamJson);
         assertEquals(AprilTagDetectorType.kNapa, loaded.detector);
-        assertEquals(16, loaded.napaMinTagPx);
+        assertEquals(22, loaded.napaMinTagPx);
     }
 
     private static Mat grayImage(TestUtils.ApriltagTestImages image) {
