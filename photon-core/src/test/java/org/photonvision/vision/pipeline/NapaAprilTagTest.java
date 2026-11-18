@@ -40,7 +40,6 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.imgproc.Imgproc;
 import org.photonvision.common.LoadJNI;
 import org.photonvision.common.configuration.ConfigProvider;
 import org.photonvision.common.dataflow.structures.Packet;
@@ -98,6 +97,9 @@ public class NapaAprilTagTest {
         }
 
         double worstCornerPx = 0;
+        // Summed corner offsets: a slip in the pixel convention moves every corner the same way
+        double offsetX = 0;
+        double offsetY = 0;
         int compared = 0;
         for (Tag expected : aprilTag) {
             // Images can repeat an ID, so match each tag to NAPA's nearest with the same ID
@@ -116,8 +118,11 @@ public class NapaAprilTagTest {
             assertNotNull(actual, "NAPA missed tag " + expected.id() + " in " + image);
             compared++;
             for (int k = 0; k < 4; k++) {
-                worstCornerPx =
-                        Math.max(worstCornerPx, distance(expected.corners().get(k), actual.corners().get(k)));
+                Point a = expected.corners().get(k);
+                Point b = actual.corners().get(k);
+                worstCornerPx = Math.max(worstCornerPx, distance(a, b));
+                offsetX += b.x - a.x;
+                offsetY += b.y - a.y;
             }
             double range = expected.pose().getTranslation().getNorm();
             double offset = expected.pose().getTranslation().getDistance(actual.pose().getTranslation());
@@ -135,9 +140,16 @@ public class NapaAprilTagTest {
                         + compared
                         + " compared, worst corner difference "
                         + worstCornerPx
-                        + " px");
+                        + " px, mean offset ("
+                        + offsetX / (4 * compared)
+                        + ", "
+                        + offsetY / (4 * compared)
+                        + ") px");
         assertTrue(compared > 0, "no tags to compare in " + image);
         assertTrue(worstCornerPx < 2, "corners differ from AprilTag's by " + worstCornerPx + " px");
+        assertTrue(
+                Math.hypot(offsetX, offsetY) / (4 * compared) < 0.25,
+                "corners are offset from AprilTag's on average");
     }
 
     private static double distance(Point a, Point b) {
@@ -219,7 +231,7 @@ public class NapaAprilTagTest {
     }
 
     @Test
-    public void testDetectorReportsUpstreamConventions() {
+    public void testHomographyMapsUpstreamTagCoordinates() {
         // The homography maps upstream's tag coordinates onto the corners, and its last column is
         // the tag's center.
         double[] corners = {100.5, 300.5, 300.5, 300.5, 300.5, 100.5, 100.5, 100.5};
@@ -359,19 +371,34 @@ public class NapaAprilTagTest {
         var blank = new Mat(480, 640, CvType.CV_8UC1, new Scalar(128));
         var tiny = new Mat(8, 8, CvType.CV_8UC1, new Scalar(0));
         var color = new Mat(480, 640, CvType.CV_8UC3, new Scalar(0, 0, 0));
-        Mat view = blank.submat(5, 400, 5, 600);
         try (var detector = new NapaTagDetector("tag36h11")) {
             assertTrue(detector.detect(blank, 32).isEmpty());
             assertTrue(detector.detect(tiny, 32).isEmpty());
             assertThrows(IllegalArgumentException.class, () -> detector.detect(color, 32));
-            Imgproc.rectangle(blank, new Point(10, 10), new Point(20, 20), new Scalar(0));
-            assertTrue(detector.detect(view, 32).isEmpty());
         } finally {
-            view.release();
             color.release();
             tiny.release();
             blank.release();
         }
         assertThrows(IllegalArgumentException.class, () -> new NapaTagDetector("tag99h99"));
+        assertThrows(IllegalArgumentException.class, () -> new NapaTagDetector(null));
+    }
+
+    @Test
+    public void testImageViewFindsTheSameTagsAsACopy() {
+        Mat image = grayImage(TestUtils.ApriltagTestImages.k36h11_stress_test);
+        // Rows of a view are further apart than its width
+        Mat view = image.submat(1, image.rows() - 1, 3, image.cols() - 5);
+        Mat copy = view.clone();
+        try (var detector = new NapaTagDetector("tag36h11")) {
+            assertFalse(view.isContinuous());
+            List<String> expected = summary(detector.detect(copy, 16));
+            assertTrue(expected.size() > 100);
+            assertEquals(expected, summary(detector.detect(view, 16)));
+        } finally {
+            copy.release();
+            view.release();
+            image.release();
+        }
     }
 }
