@@ -146,7 +146,10 @@ Java_org_photonvision_jni_NapaDetectorJni_detect
                            .min_contrast = minContrast,
                            .min_border_cells = minBorderCells,
                            .sharpening_x100 = sharpeningX100,
-                           .split_touching = 0};
+                           // 2 is NAPA's "auto", its Python default: re-detect
+                           // only frames where a decoded tag touches dark
+                           // shapes at its corners.
+                           .split_touching = 2};
   // One buffer per calling thread, reused across frames: the results are
   // copied out before the call returns.
   thread_local std::vector<napa_detection> detections(kMaxDetections);
