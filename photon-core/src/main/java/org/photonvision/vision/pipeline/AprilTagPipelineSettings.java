@@ -26,7 +26,7 @@ public class AprilTagPipelineSettings extends AdvancedPipelineSettings {
     public AprilTagDetectorType detector = AprilTagDetectorType.kNapa;
     // NAPA finds every tag at least this many pixels across; smaller values find smaller tags and
     // cost more time.
-    public int napaMinTagPx = 16;
+    public int napaMinTagPx = 22;
     public int decimate = 1;
     public double blur = 0;
     public int threads = 4; // Multiple threads seems to be better performance on most platforms
