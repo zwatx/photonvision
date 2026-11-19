@@ -4,8 +4,8 @@
 > This fork adds [NAPA](https://github.com/zwatx/NAPA), a faster AprilTag detector, to PhotonVision's AprilTag
 > pipeline.
 >
-> NAPA is Copyright (c) 2026 Zachary Wilson and is included under the GPL-3.0-only (see
-> [ExternalLicenses/NAPA-NOTICE](ExternalLicenses/NAPA-NOTICE)).
+> NAPA is Copyright (c) 2026 Zachary Wilson and is included under the GPL-3.0-only, through
+> [napa-java](https://github.com/zwatx/napa-java)'s library (see its NAPA-NOTICE).
 
 [![Discord](https://img.shields.io/discord/725836368059826228?color=%23738ADB&label=Join%20our%20Discord&logo=discord&logoColor=white)](https://discord.gg/wYxTwym)
 

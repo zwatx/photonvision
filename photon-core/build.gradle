@@ -74,6 +74,12 @@ dependencies {
         transitive = false
     }
 
+    implementation "org.photonvision:photon-napa-java:$napaVersion"
+
+    wpilibNatives("org.photonvision:photon-napa-jni:$napaVersion:$jniPlatform") {
+        transitive = false
+    }
+
     testImplementation group: 'org.junit-pioneer' , name: 'junit-pioneer', version: '2.2.0'
 }
 

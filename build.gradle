@@ -46,6 +46,8 @@ ext {
     tfliteVersion = "v2027.0.2-alpha-1"
     wpilibYear = "2027_alpha7"
     mrcalVersion = "dev-v2027.0.2-12-gdc31176";
+    // Built from https://github.com/zwatx/napa-java; dev-local resolves only from mavenLocal
+    napaVersion = "dev-local";
 
     pubVersion = versionString
     isDev = pubVersion.startsWith("dev")

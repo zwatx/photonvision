@@ -25,7 +25,7 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.photonvision.common.logging.LogGroup;
 import org.photonvision.common.logging.Logger;
-import org.photonvision.jni.NapaDetectorJni;
+import org.photonvision.napa.NapaJNI;
 import org.photonvision.vision.calibration.CameraCalibrationCoefficients;
 import org.photonvision.vision.calibration.CameraLensModel;
 import org.wpilib.vision.apriltag.AprilTagDetection;
@@ -70,8 +70,8 @@ public class NapaTagDetector implements AutoCloseable {
      */
     public NapaTagDetector(String family) {
         // Before creating the detector, so a failure here can't leak it
-        m_maxHamming = NapaDetectorJni.recommendedHamming(family);
-        m_handle = m_maxHamming < 0 ? 0 : NapaDetectorJni.create(family);
+        m_maxHamming = NapaJNI.recommendedHamming(family);
+        m_handle = m_maxHamming < 0 ? 0 : NapaJNI.create(family);
         if (m_handle == 0) {
             throw new IllegalArgumentException(
                     "NAPA couldn't create a detector for the tag family " + family);
@@ -95,7 +95,7 @@ public class NapaTagDetector implements AutoCloseable {
         if (threads == m_threads) {
             return;
         }
-        if (NapaDetectorJni.setThreads(m_handle, threads) == 0) {
+        if (NapaJNI.setThreads(m_handle, threads) == 0) {
             m_threads = threads;
         } else {
             logger.warn("NAPA couldn't start " + threads + " threads; it keeps using " + m_threads);
@@ -115,7 +115,7 @@ public class NapaTagDetector implements AutoCloseable {
         m_requestedCalibration = calibration;
         m_lensCalibration = calibration != null && isOpenCvModel(calibration) ? calibration : null;
         if (m_lensApplied) {
-            NapaDetectorJni.setLens(m_handle, NapaDetectorJni.kLensNone, null, null);
+            NapaJNI.setLens(m_handle, NapaJNI.kLensNone, null, null);
             m_lensApplied = false;
         }
     }
@@ -145,9 +145,9 @@ public class NapaTagDetector implements AutoCloseable {
             double[] k = m_lensCalibration.getIntrinsicsArr(); // the camera matrix, row by row
             m_lensApplied =
                     k.length == 9
-                            && NapaDetectorJni.setLens(
+                            && NapaJNI.setLens(
                                             m_handle,
-                                            NapaDetectorJni.kLensBrownConrady,
+                                            NapaJNI.kLensBrownConrady,
                                             new double[] {k[0], k[4], k[2], k[5], k[1]},
                                             m_lensCalibration.getDistCoeffsArr())
                                     == 0;
@@ -161,7 +161,7 @@ public class NapaTagDetector implements AutoCloseable {
                 m_lensCalibration = null; // until the calibration changes
             }
         } else {
-            NapaDetectorJni.setLens(m_handle, NapaDetectorJni.kLensNone, null, null);
+            NapaJNI.setLens(m_handle, NapaJNI.kLensNone, null, null);
             m_lensApplied = false;
         }
     }
@@ -182,7 +182,7 @@ public class NapaTagDetector implements AutoCloseable {
         applyLens(image);
 
         double[] values =
-                NapaDetectorJni.detect(
+                NapaJNI.detect(
                         m_handle,
                         image.dataAddr(),
                         image.cols(),
@@ -198,10 +198,10 @@ public class NapaTagDetector implements AutoCloseable {
                     "NAPA failed on a " + image.cols() + "x" + image.rows() + " image");
         }
 
-        int count = values.length / NapaDetectorJni.kValuesPerDetection;
+        int count = values.length / NapaJNI.kValuesPerDetection;
         List<AprilTagDetection> detections = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            int offset = i * NapaDetectorJni.kValuesPerDetection;
+            int offset = i * NapaJNI.kValuesPerDetection;
             double[] corners = new double[8];
             for (int k = 0; k < 4; k++) {
                 int napaCorner = offset + 3 + 2 * kUpstreamOrder[k]; // corners follow ID, hamming, margin
@@ -264,7 +264,7 @@ public class NapaTagDetector implements AutoCloseable {
     @Override
     public void close() {
         if (m_handle != 0) {
-            NapaDetectorJni.destroy(m_handle);
+            NapaJNI.destroy(m_handle);
             m_handle = 0;
         }
     }
