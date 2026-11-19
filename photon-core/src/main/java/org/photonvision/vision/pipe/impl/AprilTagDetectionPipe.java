@@ -40,6 +40,7 @@ public class AprilTagDetectionPipe
     private AprilTagDetector m_detector = new AprilTagDetector();
     // Exists only while the pipeline uses NAPA
     private NapaTagDetector m_napaDetector;
+    private boolean m_warnedNapaMissing;
 
     public AprilTagDetectionPipe() {
         super();
@@ -82,7 +83,10 @@ public class AprilTagDetectionPipe
 
             boolean useNapa = newParams.detector() == AprilTagDetectorType.kNapa;
             if (useNapa && !LoadJNI.hasLoaded(JNITypes.NAPA)) {
-                logger.warn("NAPA's library isn't loaded, so this pipeline uses AprilTag's detector");
+                if (!m_warnedNapaMissing) {
+                    logger.warn("NAPA's library isn't loaded, so this pipeline uses AprilTag's detector");
+                    m_warnedNapaMissing = true;
+                }
                 useNapa = false;
             }
             if (useNapa) {
