@@ -273,6 +273,7 @@ public class Main implements Callable<Integer> {
         }
 
         tryLoadJNI(JNITypes.MRCAL);
+        tryLoadJNI(JNITypes.NAPA);
 
         CVMat.enablePrint(false);
         PipelineProfiler.enablePrint(false);

@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.avaje.jsonb.Jsonb;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -60,8 +61,9 @@ public class NapaAprilTagTest {
     private record Tag(int id, List<Point> corners, Point center, Transform3d pose) {}
 
     @BeforeEach
-    public void setup() {
+    public void setup() throws IOException {
         LoadJNI.loadLibraries();
+        LoadJNI.forceLoad(LoadJNI.JNITypes.NAPA);
         ConfigProvider.getInstance().load();
     }
 
