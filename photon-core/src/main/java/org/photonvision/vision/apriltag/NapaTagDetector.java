@@ -119,10 +119,7 @@ public class NapaTagDetector implements AutoCloseable {
         }
         m_requestedCalibration = calibration;
         m_lensCalibration = calibration != null && isOpenCvModel(calibration) ? calibration : null;
-        if (m_lensApplied) {
-            NapaJNI.setLens(m_handle, NapaJNI.kLensNone, null, null);
-            m_lensApplied = false;
-        }
+        clearLens();
     }
 
     /** Whether NAPA's lens is set, for the last image's resolution. */
@@ -167,6 +164,12 @@ public class NapaTagDetector implements AutoCloseable {
                 m_lensCalibration = null; // until the calibration changes
             }
         } else {
+            clearLens();
+        }
+    }
+
+    private void clearLens() {
+        if (m_lensApplied) {
             NapaJNI.setLens(m_handle, NapaJNI.kLensNone, null, null);
             m_lensApplied = false;
         }
