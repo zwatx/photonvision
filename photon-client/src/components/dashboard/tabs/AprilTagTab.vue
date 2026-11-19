@@ -11,7 +11,8 @@ import PvSwitch from "@/components/common/pv-switch.vue";
 import { computed } from "vue";
 import { useStateStore } from "@/stores/StateStore";
 import { useCameraSettingsStore } from "@/stores/settings/CameraSettingsStore";
-import { useDisplay } from "vuetify";
+import { useSettingsStore } from "@/stores/settings/GeneralSettingsStore";
+import { useDisplay, useTheme } from "vuetify";
 
 // TODO fix pipeline typing in order to fix this, the store settings call should be able to infer that only valid pipeline type settings are exposed based on pre-checks for the entire config section
 // Defer reference to store access method
@@ -19,10 +20,13 @@ const currentPipelineSettings = computed<AprilTagPipelineSettings>(
   () => useCameraSettingsStore().currentPipelineSettings as AprilTagPipelineSettings
 );
 const { mdAndDown } = useDisplay();
+const theme = useTheme();
 const interactiveCols = computed(() =>
   mdAndDown.value && (!useStateStore().sidebarFolded || useCameraSettingsStore().isDriverMode) ? 8 : 7
 );
-const usingNapa = computed(() => currentPipelineSettings.value.detector === AprilTagDetectorType.Napa);
+const napaChosen = computed(() => currentPipelineSettings.value.detector === AprilTagDetectorType.Napa);
+// Without NAPA's library the pipeline runs AprilTag, so show AprilTag's settings
+const usingNapa = computed(() => napaChosen.value && useSettingsStore().general.napaWorking);
 </script>
 
 <template>
@@ -37,6 +41,15 @@ const usingNapa = computed(() => currentPipelineSettings.value.detector === Apri
       ]"
       :select-cols="interactiveCols"
       @update:modelValue="(value) => useCameraSettingsStore().changeCurrentPipelineSetting({ detector: value }, false)"
+    />
+    <v-alert
+      v-if="napaChosen && !usingNapa"
+      class="mb-3"
+      color="error"
+      density="compact"
+      icon="mdi-alert-circle-outline"
+      :variant="theme.global.current.value.dark ? 'tonal' : 'elevated'"
+      text="NAPA failed to load, so this pipeline uses AprilTag. Check journalctl logs for details."
     />
     <pv-select
       v-model="currentPipelineSettings.tagFamily"
