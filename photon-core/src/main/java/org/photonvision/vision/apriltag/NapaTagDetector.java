@@ -67,6 +67,7 @@ public class NapaTagDetector implements AutoCloseable {
 
     /**
      * @param family a tag family's native name, such as "tag36h11"
+     * @throws IllegalArgumentException if NAPA doesn't know the family or runs out of memory
      */
     public NapaTagDetector(String family) {
         // Before creating the detector, so a failure here can't leak it
@@ -79,6 +80,7 @@ public class NapaTagDetector implements AutoCloseable {
         m_family = family;
     }
 
+    /** The native name of the family this detector finds. */
     public String getFamily() {
         return m_family;
     }
@@ -106,6 +108,9 @@ public class NapaTagDetector implements AutoCloseable {
      * Fits tag sides through the camera's lens, which straightens the corners of tags the lens bends.
      * The lens applies to images at the calibration's resolution; others, a null calibration and
      * mrcal models fit sides in pixels.
+     *
+     * @param calibration the camera's calibration at the current resolution, or null; compared by
+     *     reference
      */
     public void setCalibration(CameraCalibrationCoefficients calibration) {
         requireOpen();
@@ -143,21 +148,22 @@ public class NapaTagDetector implements AutoCloseable {
         }
         if (wanted) {
             double[] k = m_lensCalibration.getIntrinsicsArr(); // the camera matrix, row by row
+            double[] coefficients = m_lensCalibration.getDistCoeffsArr();
             m_lensApplied =
                     k.length == 9
                             && NapaJNI.setLens(
                                             m_handle,
                                             NapaJNI.kLensBrownConrady,
                                             new double[] {k[0], k[4], k[2], k[5], k[1]},
-                                            m_lensCalibration.getDistCoeffsArr())
+                                            coefficients)
                                     == 0;
             if (!m_lensApplied) {
                 logger.warn(
-                        "NAPA can't use this camera calibration's lens, so it fits tags in pixels: "
+                        "NAPA can't use this calibration's lens ("
                                 + k.length
                                 + " camera matrix values, "
-                                + m_lensCalibration.getDistCoeffsArr().length
-                                + " distortion coefficients");
+                                + coefficients.length
+                                + " distortion coefficients), so it fits tags in pixels");
                 m_lensCalibration = null; // until the calibration changes
             }
         } else {
