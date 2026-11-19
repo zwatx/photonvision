@@ -18,6 +18,10 @@
 package org.photonvision.vision.pipe.impl;
 
 import java.util.List;
+import org.photonvision.common.LoadJNI;
+import org.photonvision.common.LoadJNI.JNITypes;
+import org.photonvision.common.logging.LogGroup;
+import org.photonvision.common.logging.Logger;
 import org.photonvision.vision.apriltag.AprilTagDetectorType;
 import org.photonvision.vision.apriltag.AprilTagFamily;
 import org.photonvision.vision.apriltag.NapaTagDetector;
@@ -30,6 +34,9 @@ import org.wpilib.vision.apriltag.AprilTagDetector;
 public class AprilTagDetectionPipe
         extends CVPipe<
                 CVMat, List<AprilTagDetection>, AprilTagDetectionPipe.AprilTagDetectionPipeParams> {
+    private static final Logger logger =
+            new Logger(AprilTagDetectionPipe.class, LogGroup.VisionModule);
+
     private AprilTagDetector m_detector = new AprilTagDetector();
     // Exists only while the pipeline uses NAPA
     private NapaTagDetector m_napaDetector;
@@ -51,7 +58,7 @@ public class AprilTagDetectionPipe
             throw new RuntimeException("Apriltag detector was released!");
         }
 
-        if (params.detector() == AprilTagDetectorType.kNapa) {
+        if (m_napaDetector != null) {
             return m_napaDetector.detect(in.getMat(), params.napaMinTagPx());
         }
 
@@ -73,7 +80,12 @@ public class AprilTagDetectionPipe
             m_detector.clearFamilies();
             m_detector.addFamily(newParams.family().getNativeName());
 
-            if (newParams.detector() == AprilTagDetectorType.kNapa) {
+            boolean useNapa = newParams.detector() == AprilTagDetectorType.kNapa;
+            if (useNapa && !LoadJNI.hasLoaded(JNITypes.NAPA)) {
+                logger.warn("NAPA's library isn't loaded, so this pipeline uses AprilTag's detector");
+                useNapa = false;
+            }
+            if (useNapa) {
                 String family = newParams.family().getNativeName();
                 // A new family needs a new detector, created before the old one is closed. Creating it
                 // fails only when NAPA is out of memory; this then throws on every frame until the
