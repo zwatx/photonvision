@@ -60,6 +60,12 @@ import org.wpilib.vision.apriltag.AprilTagDetection;
 public class NapaAprilTagTest {
     private record Tag(int id, List<Point> corners, Point center, Transform3d pose) {}
 
+    // Each run loads a fresh calibration
+    private static final Supplier<CameraCalibrationCoefficients> kLifeCam =
+            () -> TestUtils.get2020LifeCamCoeffs(false);
+    private static final Supplier<CameraCalibrationCoefficients> kLimelight =
+            () -> TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false);
+
     @BeforeEach
     public void setup() throws IOException {
         LoadJNI.loadLibraries();
@@ -68,17 +74,15 @@ public class NapaAprilTagTest {
     }
 
     static Stream<Arguments> images() {
-        Supplier<CameraCalibrationCoefficients> lifeCam = () -> TestUtils.get2020LifeCamCoeffs(false);
-        Supplier<CameraCalibrationCoefficients> limelight =
-                () -> TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false);
         return Stream.of(
-                Arguments.of(TestUtils.ApriltagTestImages.kTag1_640_480, AprilTagFamily.kTag36h11, lifeCam),
                 Arguments.of(
-                        TestUtils.ApriltagTestImages.kTag1_16h5_1280, AprilTagFamily.kTag16h5, limelight),
+                        TestUtils.ApriltagTestImages.kTag1_640_480, AprilTagFamily.kTag36h11, kLifeCam),
                 Arguments.of(
-                        TestUtils.ApriltagTestImages.kTag_corner_1280, AprilTagFamily.kTag16h5, limelight),
+                        TestUtils.ApriltagTestImages.kTag1_16h5_1280, AprilTagFamily.kTag16h5, kLimelight),
                 Arguments.of(
-                        TestUtils.ApriltagTestImages.k36h11_stress_test, AprilTagFamily.kTag36h11, limelight));
+                        TestUtils.ApriltagTestImages.kTag_corner_1280, AprilTagFamily.kTag16h5, kLimelight),
+                Arguments.of(
+                        TestUtils.ApriltagTestImages.k36h11_stress_test, AprilTagFamily.kTag36h11, kLimelight));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -104,7 +108,8 @@ public class NapaAprilTagTest {
         double offsetY = 0;
         int compared = 0;
         for (Tag expected : aprilTag) {
-            // Images can repeat an ID, so match each tag to NAPA's nearest with the same ID
+            // Images can repeat an ID, so match each tag to NAPA's nearest with the same ID, within
+            // 5 px of AprilTag's center
             Tag actual = null;
             double nearest = 5;
             for (Tag candidate : napa) {
@@ -213,22 +218,19 @@ public class NapaAprilTagTest {
         // setting: NAPA, AprilTag, NAPA again, then NAPA with another family.
         var tag36h11 = TestUtils.ApriltagTestImages.kTag1_640_480;
         var tag16h5 = TestUtils.ApriltagTestImages.kTag1_16h5_1280;
-        Supplier<CameraCalibrationCoefficients> lifeCam = () -> TestUtils.get2020LifeCamCoeffs(false);
-        Supplier<CameraCalibrationCoefficients> limelight =
-                () -> TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false);
         var napa = AprilTagDetectorType.kNapa;
         var aprilTag = AprilTagDetectorType.kAprilTag;
         try (var pipeline = new AprilTagPipeline()) {
             pipeline.getSettings().solvePNPEnabled = true;
             pipeline.getSettings().outputMaximumTargets = 1000;
             for (var detector : List.of(napa, aprilTag, napa)) {
-                List<Tag> tags = run(pipeline, tag36h11, AprilTagFamily.kTag36h11, lifeCam, detector);
+                List<Tag> tags = run(pipeline, tag36h11, AprilTagFamily.kTag36h11, kLifeCam, detector);
                 assertFalse(tags.isEmpty(), detector + " found no tags");
-                assertEquals(detect(tag36h11, AprilTagFamily.kTag36h11, lifeCam, detector), tags);
+                assertEquals(detect(tag36h11, AprilTagFamily.kTag36h11, kLifeCam, detector), tags);
             }
-            List<Tag> tags = run(pipeline, tag16h5, AprilTagFamily.kTag16h5, limelight, napa);
+            List<Tag> tags = run(pipeline, tag16h5, AprilTagFamily.kTag16h5, kLimelight, napa);
             assertFalse(tags.isEmpty(), "NAPA found no tag16h5 tags");
-            assertEquals(detect(tag16h5, AprilTagFamily.kTag16h5, limelight, napa), tags);
+            assertEquals(detect(tag16h5, AprilTagFamily.kTag16h5, kLimelight, napa), tags);
         }
     }
 
