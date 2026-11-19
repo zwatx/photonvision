@@ -159,59 +159,6 @@ public class NapaAprilTagTest {
                 "corners are offset from AprilTag's on average");
     }
 
-    private static double distance(Point a, Point b) {
-        return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    private static List<Tag> detect(
-            TestUtils.ApriltagTestImages image,
-            AprilTagFamily family,
-            Supplier<CameraCalibrationCoefficients> calibration,
-            AprilTagDetectorType detector) {
-        try (var pipeline = new AprilTagPipeline()) {
-            pipeline.getSettings().solvePNPEnabled = true;
-            pipeline.getSettings().outputMaximumTargets = 1000;
-            return run(pipeline, image, family, calibration, detector);
-        }
-    }
-
-    private static List<Tag> run(
-            AprilTagPipeline pipeline,
-            TestUtils.ApriltagTestImages image,
-            AprilTagFamily family,
-            Supplier<CameraCalibrationCoefficients> calibration,
-            AprilTagDetectorType detector) {
-        pipeline.getSettings().tagFamily = family;
-        pipeline.getSettings().detector = detector;
-        List<Tag> tags = new ArrayList<>();
-        try (var frameProvider =
-                new FileFrameProvider(
-                        TestUtils.getApriltagImagePath(image, false),
-                        TestUtils.WPI2020Image.FOV,
-                        calibration.get())) {
-            frameProvider.requestFrameThresholdType(pipeline.getThresholdType());
-            try (CVPipelineResult result =
-                    pipeline.run(frameProvider.get(), QuirkyCamera.DefaultCamera)) {
-                for (var target : result.targets) {
-                    var corners = List.copyOf(target.getTargetCorners());
-                    double x = 0;
-                    double y = 0;
-                    for (Point corner : corners) {
-                        x += corner.x / 4;
-                        y += corner.y / 4;
-                    }
-                    tags.add(
-                            new Tag(
-                                    target.getFiducialId(),
-                                    corners,
-                                    new Point(x, y),
-                                    target.getBestCameraToTarget3d()));
-                }
-            }
-        }
-        return tags;
-    }
-
     @Test
     public void testSwitchingDetectorsAndFamilies() {
         // One pipeline switching detector and family gives what a fresh pipeline gives for each
@@ -271,25 +218,6 @@ public class NapaAprilTagTest {
         assertEquals(22, loaded.napaMinTagPx);
     }
 
-    private static Mat grayImage(TestUtils.ApriltagTestImages image) {
-        return Imgcodecs.imread(
-                TestUtils.getApriltagImagePath(image, false).toString(), Imgcodecs.IMREAD_GRAYSCALE);
-    }
-
-    private static List<String> summary(List<AprilTagDetection> detections) {
-        return detections.stream()
-                .map(
-                        d ->
-                                d.getId()
-                                        + " "
-                                        + d.getHamming()
-                                        + " "
-                                        + d.getDecisionMargin()
-                                        + " "
-                                        + Arrays.toString(d.getCorners()))
-                .toList();
-    }
-
     @Test
     public void testThreadsFindTheSameTags() {
         Mat image = grayImage(TestUtils.ApriltagTestImages.k36h11_stress_test);
@@ -303,30 +231,6 @@ public class NapaAprilTagTest {
         } finally {
             image.release();
         }
-    }
-
-    private static CameraCalibrationCoefficients withLensModel(
-            CameraCalibrationCoefficients calibration, CameraLensModel model) {
-        return new CameraCalibrationCoefficients(
-                calibration.resolution,
-                calibration.cameraIntrinsics,
-                calibration.distCoeffs,
-                calibration.calobjectWarp,
-                calibration.observations,
-                calibration.calobjectSize,
-                calibration.calobjectSpacing,
-                model,
-                calibration.optimizationInputs);
-    }
-
-    private static double largestCornerMove(AprilTagDetection a, AprilTagDetection b) {
-        double[] p = a.getCorners();
-        double[] q = b.getCorners();
-        double largest = 0;
-        for (int k = 0; k < 8; k += 2) {
-            largest = Math.max(largest, Math.hypot(p[k] - q[k], p[k + 1] - q[k + 1]));
-        }
-        return largest;
     }
 
     @Test
@@ -371,7 +275,7 @@ public class NapaAprilTagTest {
     }
 
     @Test
-    public void testBlankAndTinyImages() {
+    public void testBlankTinyAndColorImages() {
         var blank = new Mat(480, 640, CvType.CV_8UC1, new Scalar(128));
         var tiny = new Mat(8, 8, CvType.CV_8UC1, new Scalar(0));
         var color = new Mat(480, 640, CvType.CV_8UC3, new Scalar(0, 0, 0));
@@ -384,6 +288,10 @@ public class NapaAprilTagTest {
             tiny.release();
             blank.release();
         }
+    }
+
+    @Test
+    public void testUnknownFamiliesThrow() {
         assertThrows(IllegalArgumentException.class, () -> new NapaTagDetector("tag99h99"));
         assertThrows(IllegalArgumentException.class, () -> new NapaTagDetector(null));
     }
@@ -404,5 +312,101 @@ public class NapaAprilTagTest {
             view.release();
             image.release();
         }
+    }
+
+    private static double distance(Point a, Point b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    private static List<Tag> detect(
+            TestUtils.ApriltagTestImages image,
+            AprilTagFamily family,
+            Supplier<CameraCalibrationCoefficients> calibration,
+            AprilTagDetectorType detector) {
+        try (var pipeline = new AprilTagPipeline()) {
+            pipeline.getSettings().solvePNPEnabled = true;
+            pipeline.getSettings().outputMaximumTargets = 1000;
+            return run(pipeline, image, family, calibration, detector);
+        }
+    }
+
+    private static List<Tag> run(
+            AprilTagPipeline pipeline,
+            TestUtils.ApriltagTestImages image,
+            AprilTagFamily family,
+            Supplier<CameraCalibrationCoefficients> calibration,
+            AprilTagDetectorType detector) {
+        pipeline.getSettings().tagFamily = family;
+        pipeline.getSettings().detector = detector;
+        List<Tag> tags = new ArrayList<>();
+        try (var frameProvider =
+                new FileFrameProvider(
+                        TestUtils.getApriltagImagePath(image, false),
+                        TestUtils.WPI2020Image.FOV,
+                        calibration.get())) {
+            frameProvider.requestFrameThresholdType(pipeline.getThresholdType());
+            try (CVPipelineResult result =
+                    pipeline.run(frameProvider.get(), QuirkyCamera.DefaultCamera)) {
+                for (var target : result.targets) {
+                    var corners = List.copyOf(target.getTargetCorners());
+                    double x = 0;
+                    double y = 0;
+                    for (Point corner : corners) {
+                        x += corner.x / 4;
+                        y += corner.y / 4;
+                    }
+                    tags.add(
+                            new Tag(
+                                    target.getFiducialId(),
+                                    corners,
+                                    new Point(x, y),
+                                    target.getBestCameraToTarget3d()));
+                }
+            }
+        }
+        return tags;
+    }
+
+    private static Mat grayImage(TestUtils.ApriltagTestImages image) {
+        return Imgcodecs.imread(
+                TestUtils.getApriltagImagePath(image, false).toString(), Imgcodecs.IMREAD_GRAYSCALE);
+    }
+
+    private static List<String> summary(List<AprilTagDetection> detections) {
+        return detections.stream()
+                .map(
+                        d ->
+                                d.getId()
+                                        + " "
+                                        + d.getHamming()
+                                        + " "
+                                        + d.getDecisionMargin()
+                                        + " "
+                                        + Arrays.toString(d.getCorners()))
+                .toList();
+    }
+
+    private static CameraCalibrationCoefficients withLensModel(
+            CameraCalibrationCoefficients calibration, CameraLensModel model) {
+        return new CameraCalibrationCoefficients(
+                calibration.resolution,
+                calibration.cameraIntrinsics,
+                calibration.distCoeffs,
+                calibration.calobjectWarp,
+                calibration.observations,
+                calibration.calobjectSize,
+                calibration.calobjectSpacing,
+                model,
+                calibration.optimizationInputs);
+    }
+
+    private static double largestCornerMove(AprilTagDetection a, AprilTagDetection b) {
+        double[] p = a.getCorners();
+        double[] q = b.getCorners();
+        double largest = 0;
+        for (int k = 0; k < 8; k += 2) {
+            largest = Math.max(largest, Math.hypot(p[k] - q[k], p[k + 1] - q[k + 1]));
+        }
+        return largest;
     }
 }
