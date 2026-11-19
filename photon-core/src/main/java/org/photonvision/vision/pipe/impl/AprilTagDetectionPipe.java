@@ -92,8 +92,8 @@ public class AprilTagDetectionPipe
             if (useNapa) {
                 String family = newParams.family().getNativeName();
                 // A new family needs a new detector, created before the old one is closed. Creating it
-                // fails only when NAPA is out of memory; this then throws on every frame until the
-                // settings change, and the old detector stays valid.
+                // fails only when NAPA is out of memory; this then throws, the old detector and params
+                // stay, and the next frame tries again.
                 var napaDetector =
                         m_napaDetector != null && m_napaDetector.getFamily().equals(family)
                                 ? m_napaDetector
@@ -127,7 +127,9 @@ public class AprilTagDetectionPipe
     }
 
     /**
+     * @param family the tag family to find
      * @param detectorParams AprilTag's settings; NAPA uses only their thread count
+     * @param quadParams AprilTag's quad thresholds; NAPA ignores them
      * @param detector the detector to run
      * @param napaMinTagPx the smallest tag side, in pixels, NAPA is guaranteed to find
      * @param calibration the camera's calibration at the current resolution, or null; NAPA fits tag
