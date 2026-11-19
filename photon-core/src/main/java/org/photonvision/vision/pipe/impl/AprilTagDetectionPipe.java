@@ -81,35 +81,11 @@ public class AprilTagDetectionPipe
             m_detector.clearFamilies();
             m_detector.addFamily(newParams.family().getNativeName());
 
-            boolean useNapa = newParams.detector() == AprilTagDetectorType.kNapa;
-            if (useNapa && !LoadJNI.hasLoaded(JNITypes.NAPA)) {
-                if (!m_warnedNapaMissing) {
-                    logger.warn("NAPA's library isn't loaded, so this pipeline uses AprilTag's detector");
-                    m_warnedNapaMissing = true;
-                }
-                useNapa = false;
-            }
-            if (useNapa) {
-                String family = newParams.family().getNativeName();
-                // A new family needs a new detector, created before the old one is closed. Creating it
-                // fails only when NAPA is out of memory; this then throws, the old detector and params
-                // stay, and the next frame tries again.
-                var napaDetector =
-                        m_napaDetector != null && m_napaDetector.getFamily().equals(family)
-                                ? m_napaDetector
-                                : new NapaTagDetector(family);
-                napaDetector.setThreads(newParams.detectorParams().numThreads);
-                napaDetector.setCalibration(newParams.calibration());
-                if (napaDetector != m_napaDetector) {
-                    if (m_napaDetector != null) {
-                        m_napaDetector.close();
-                    }
-                    m_napaDetector = napaDetector;
-                }
-            } else if (m_napaDetector != null) {
+            if (shouldUseNapa(newParams)) {
+                updateNapaDetector(newParams);
+            } else {
                 // Free NAPA's worker threads and buffers while AprilTag runs
-                m_napaDetector.close();
-                m_napaDetector = null;
+                closeNapaDetector();
             }
         }
 
@@ -120,6 +96,39 @@ public class AprilTagDetectionPipe
     public void release() {
         m_detector.close();
         m_detector = null;
+        closeNapaDetector();
+    }
+
+    // NAPA runs when chosen and its library is loaded; otherwise AprilTag does
+    private boolean shouldUseNapa(AprilTagDetectionPipeParams params) {
+        if (params.detector() != AprilTagDetectorType.kNapa) {
+            return false;
+        }
+        if (LoadJNI.hasLoaded(JNITypes.NAPA)) {
+            return true;
+        }
+        if (!m_warnedNapaMissing) {
+            logger.warn("NAPA's library isn't loaded, so this pipeline uses AprilTag's detector");
+            m_warnedNapaMissing = true;
+        }
+        return false;
+    }
+
+    private void updateNapaDetector(AprilTagDetectionPipeParams params) {
+        String family = params.family().getNativeName();
+        if (m_napaDetector == null || !m_napaDetector.getFamily().equals(family)) {
+            // Created before the old detector is closed. Creating it fails only when NAPA is out of
+            // memory; this then throws, the old detector and params stay, and the next frame tries
+            // again.
+            var created = new NapaTagDetector(family);
+            closeNapaDetector();
+            m_napaDetector = created;
+        }
+        m_napaDetector.setThreads(params.detectorParams().numThreads);
+        m_napaDetector.setCalibration(params.calibration());
+    }
+
+    private void closeNapaDetector() {
         if (m_napaDetector != null) {
             m_napaDetector.close();
             m_napaDetector = null;
