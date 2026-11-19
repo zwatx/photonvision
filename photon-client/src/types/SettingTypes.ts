@@ -11,6 +11,7 @@ export interface GeneralSettings {
   hardwarePlatform?: string;
   wpilibArch?: string;
   mrCalWorking: boolean;
+  napaWorking: boolean;
   availableModels: ObjectDetectionModelProperties[];
   supportedBackends: string[];
   conflictingHostname: boolean;

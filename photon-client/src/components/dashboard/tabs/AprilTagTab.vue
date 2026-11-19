@@ -9,7 +9,9 @@ import {
 import { computed } from "vue";
 import { useStateStore } from "@/stores/StateStore";
 import { useCameraSettingsStore } from "@/stores/settings/CameraSettingsStore";
+import { useSettingsStore } from "@/stores/settings/GeneralSettingsStore";
 import { useCustomBreakpoints } from "@/lib/Breakpoints";
+import IconAlertCircleOutline from "~icons/mdi/alert-circle-outline";
 
 // TODO fix pipeline typing in order to fix this, the store settings call should be able to infer that only valid pipeline type settings are exposed based on pre-checks for the entire config section
 // Defer reference to store access method
@@ -21,7 +23,9 @@ const mdAndDown = breakpoints.smallerOrEqual("md");
 const interactiveCols = computed(() =>
   mdAndDown.value && (!useStateStore().sidebarFolded || useCameraSettingsStore().isDriverMode) ? 8 : 7
 );
-const usingNapa = computed(() => currentPipelineSettings.value.detector === AprilTagDetectorType.Napa);
+const napaChosen = computed(() => currentPipelineSettings.value.detector === AprilTagDetectorType.Napa);
+// Without NAPA's library the pipeline runs AprilTag, so show AprilTag's settings
+const usingNapa = computed(() => napaChosen.value && useSettingsStore().general.napaWorking);
 </script>
 
 <template>
@@ -39,6 +43,13 @@ const usingNapa = computed(() => currentPipelineSettings.value.detector === Apri
         (value: AprilTagDetectorType) =>
           useCameraSettingsStore().changeCurrentPipelineSetting({ detector: value }, false)
       "
+    />
+    <pv-alert
+      v-if="napaChosen && !usingNapa"
+      class="my-2"
+      color="error"
+      :icon="IconAlertCircleOutline"
+      text="NAPA failed to load, so this pipeline uses AprilTag. Check journalctl logs for details."
     />
     <pv-select
       v-model="currentPipelineSettings.tagFamily"
