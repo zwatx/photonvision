@@ -49,7 +49,7 @@ const usingNapa = computed(() => napaChosen.value && useSettingsStore().general.
       density="compact"
       icon="mdi-alert-circle-outline"
       :variant="theme.global.current.value.dark ? 'tonal' : 'elevated'"
-      text="NAPA failed to load, so this pipeline uses AprilTag. Check journalctl logs for details."
+      text="NAPA failed to load, so this pipeline uses AprilTag. Check PhotonVision's logs for details."
     />
     <pv-select
       v-model="currentPipelineSettings.tagFamily"
